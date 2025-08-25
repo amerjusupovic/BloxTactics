@@ -17,22 +17,22 @@ BloxTactics is a Teamfight Tactics (TFT) inspired game for Roblox where players 
 ## Phase 1: Foundation & Core Systems
 
 ### Step 1: Project Structure & Basic Setup
-- [ ] Set up proper folder structure for client, server, and shared modules
-- [ ] Create basic player data structure (gold, level, experience, units, items)
-- [ ] Implement basic player spawning and board creation
-- [ ] Set up RemoteEvents for client-server communication
+- [x] Set up proper folder structure for client, server, and shared modules
+- [x] Create basic player data structure (gold, level, experience, units, items)
+- [x] Implement basic player spawning and board creation
+- [x] Set up RemoteEvents for client-server communication
 
 ### Step 2: Player Data Management
-- [ ] Create PlayerData module to handle player state
-- [ ] Implement data persistence (save/load player data)
-- [ ] Set up player joining/leaving handlers
-- [ ] Create basic UI for displaying player stats (gold, level, etc.)
+- [x] Create PlayerData module to handle player state
+- [x] Implement data persistence (save/load player data)
+- [x] Set up player joining/leaving handlers
+- [x] Create basic UI for displaying player stats (gold, level, etc.)
 
 ### Step 3: Unit System Foundation
-- [ ] Design unit data structure (name, cost, tier, stats, abilities)
-- [ ] Create Unit module for unit management
-- [ ] Implement unit creation and basic properties
-- [ ] Set up unit tiering system (1-star to 3-star)
+- [x] Design unit data structure (name, cost, tier, stats, abilities)
+- [x] Create Unit module for unit management
+- [x] Implement unit creation and basic properties
+- [x] Set up unit tiering system (1-star to 3-star)
 
 ---
 
@@ -61,19 +61,19 @@ BloxTactics is a Teamfight Tactics (TFT) inspired game for Roblox where players 
 ## Phase 3: Board & Unit Management
 
 ### Step 7: Board System
-- [ ] Create visual board representation
-- [ ] Implement board grid system (hexagonal or square)
-- [ ] Add unit placement validation
-- [ ] Create board state management
+- [x] Create visual board representation
+- [x] Implement board grid system (hexagonal or square)
+- [x] Add unit placement validation
+- [x] Create board state management
 
 ### Step 8: Bench System
-- [ ] Implement bench for storing unused units
-- [ ] Create unit movement between board and bench
-- [ ] Add bench capacity management
-- [ ] Implement unit selling from bench
+- [x] Implement bench for storing unused units
+- [x] Create unit movement between board and bench
+- [x] Add bench capacity management
+- [x] Implement unit selling from bench
 
 ### Step 9: Unit Tiering
-- [ ] Create unit combination system (3 same units = 1 higher tier)
+- [x] Create unit combination system (3 same units = 1 higher tier)
 - [ ] Implement automatic tiering when conditions are met
 - [ ] Add tier-up effects and animations
 - [ ] Update unit stats based on tier
