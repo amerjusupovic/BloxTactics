@@ -13,11 +13,11 @@ Constants.EXPERIENCE_PER_LEVEL = 100
 
 -- Board constants
 Constants.BOARD_WIDTH = 7
-Constants.BOARD_HEIGHT = 6
-Constants.MAX_BOARD_UNITS = 9
+Constants.BOARD_HEIGHT = 4
+Constants.MAX_BOARD_UNITS = 10
 
 -- Bench constants
-Constants.BENCH_CAPACITY = 8
+Constants.BENCH_CAPACITY = 6
 
 -- Shop constants
 Constants.SHOP_SIZE = 5
