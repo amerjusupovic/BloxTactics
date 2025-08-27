@@ -59,7 +59,8 @@ Constants.REMOTE_EVENT_NAMES = {
 	UPDATE_PLAYER_DATA = "UpdatePlayerData",
 	UPDATE_SHOP = "UpdateShop",
 	UPDATE_BENCH = "UpdateBench",
-	SHOW_NOTIFICATION = "ShowNotification"
+	SHOW_NOTIFICATION = "ShowNotification",
+	RESET_PLAYER_DATA = "ResetPlayerData"
 }
 
 return Constants

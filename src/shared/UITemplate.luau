@@ -233,6 +233,27 @@ function UITemplate.createTemplate()
 	cKeyDesc.Font = Enum.Font.Gotham
 	cKeyDesc.Parent = cKeyIndicator
 	
+	-- Create sell unit frame
+	local sellUnitFrame = Instance.new("Frame")
+	sellUnitFrame.Name = "SellUnitFrame"
+	sellUnitFrame.Size = UDim2.new(0.3, 0, 0.08, 0)
+	sellUnitFrame.Position = UDim2.new(0.35, 0, 0.92, 0)
+	sellUnitFrame.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+	sellUnitFrame.BorderSizePixel = 0
+	sellUnitFrame.Visible = false
+	sellUnitFrame.Parent = mainFrame
+	
+	local sellLabel = Instance.new("TextLabel")
+	sellLabel.Name = "SellLabel"
+	sellLabel.Size = UDim2.new(1, 0, 1, 0)
+	sellLabel.Position = UDim2.new(0, 0, 0, 0)
+	sellLabel.BackgroundTransparency = 1
+	sellLabel.Text = "SELL UNIT"
+	sellLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	sellLabel.TextScaled = true
+	sellLabel.Font = Enum.Font.GothamBold
+	sellLabel.Parent = sellUnitFrame
+	
 	return templateGui
 end
 

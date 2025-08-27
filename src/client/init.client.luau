@@ -65,6 +65,12 @@ local function setupKeybindHandlers()
 			UI.toggleShop()
 		elseif input.KeyCode == Enum.KeyCode.C then
 			UI.toggleBoard()
+		elseif input.KeyCode == Enum.KeyCode.R then
+			-- Reset player data (for testing)
+			UI.resetPlayerData()
+		elseif input.KeyCode == Enum.KeyCode.Escape then
+			-- Clear unit selection
+			UI.clearSelection()
 		end
 	end)
 end

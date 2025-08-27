@@ -73,7 +73,16 @@ function UnitSpawner.spawnUnitOnBoard(userId: number, unit: any, position: Vecto
 	spawnedUnit.Name = unit.name .. "_" .. unit.id
 	
 	-- Position the unit at the hex location
-	spawnedUnit:PivotTo(hex.CFrame)
+	-- Adjust Y position to be on top of the hex
+	local hexCFrame = hex.CFrame
+	
+	-- Calculate unit height and raise by half the unit's height
+	local unitSize = spawnedUnit:GetExtentsSize()
+	local unitHeight = unitSize.Y
+	local heightOffset = unitHeight / 2
+	
+	local adjustedCFrame = CFrame.new(hexCFrame.Position + Vector3.new(0, heightOffset, 0))
+	spawnedUnit:PivotTo(adjustedCFrame)
 	
 	-- Store unit data in the model
 	spawnedUnit:SetAttribute("UnitId", unit.id)
@@ -125,7 +134,16 @@ function UnitSpawner.spawnUnitOnBench(userId: number, unit: any, benchSlot: numb
 	spawnedUnit.Name = unit.name .. "_" .. unit.id
 	
 	-- Position the unit at the bench location
-	spawnedUnit:PivotTo(bench.CFrame)
+	-- Adjust Y position to be on top of the bench
+	local benchCFrame = bench.CFrame
+	
+	-- Calculate unit height and raise by half the unit's height
+	local unitSize = spawnedUnit:GetExtentsSize()
+	local unitHeight = unitSize.Y
+	local heightOffset = unitHeight / 2
+	
+	local adjustedCFrame = CFrame.new(benchCFrame.Position + Vector3.new(0, heightOffset, 0))
+	spawnedUnit:PivotTo(adjustedCFrame)
 	
 	-- Store unit data in the model
 	spawnedUnit:SetAttribute("UnitId", unit.id)

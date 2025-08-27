@@ -296,6 +296,31 @@ function PlayerDataManager.addExperience(userId: number, amount: number): boolea
 	return true
 end
 
+-- Function to reset player data (for testing purposes)
+function PlayerDataManager.resetPlayerData(userId: number): boolean
+	local player = Players:GetPlayerByUserId(userId)
+	if not player then
+		warn("Player not found for reset: " .. userId)
+		return false
+	end
+	
+	-- Remove from data store
+	local success, error = pcall(function()
+		playerDataStore:RemoveAsync(tostring(userId))
+	end)
+	
+	if not success then
+		warn("Failed to remove player data from DataStore for user " .. userId .. ": " .. tostring(error))
+		return false
+	end
+	
+	-- Remove from cache
+	playerDataCache[userId] = nil
+	
+	print("Player data reset successfully for user: " .. userId)
+	return true
+end
+
 -- Function to remove player data from cache
 function PlayerDataManager.removePlayerData(userId: number): boolean
 	if playerDataCache[userId] then

@@ -55,7 +55,7 @@ end)
 		-- This will be implemented in Phase 3
 		print("Player " .. player.Name .. " attempted to place unit " .. unitId .. " at position " .. tostring(position))
 	end)
-
+	
 	-- Move unit handler
 	moveUnitEvent.OnServerEvent:Connect(function(player, fromPosition, toPosition)
 		local userId = player.UserId
@@ -65,10 +65,36 @@ end)
 			return
 		end
 
-		-- Handle unit movement logic here
-		-- This will be implemented in Phase 3
-		print("Player " .. player.Name .. " attempted to move unit from " .. tostring(fromPosition) .. " to " .. tostring(toPosition))
+		-- Handle unit movement through ShopManager
+		local success = ShopManager.handleUnitMove(userId, fromPosition, toPosition)
+		
+		if success then
+			print("Player " .. player.Name .. " successfully moved unit from " .. tostring(fromPosition) .. " to " .. tostring(toPosition))
+		else
+			print("Player " .. player.Name .. " failed to move unit from " .. tostring(fromPosition) .. " to " .. tostring(toPosition))
+		end
 	end)
+	
+	-- Sell unit handler
+	sellUnitEvent.OnServerEvent:Connect(function(player, unitId, position)
+		local userId = player.UserId
+		local playerData = PlayerDataManager.getPlayerData(userId)
+
+		if not playerData then
+			return
+		end
+
+		-- Handle unit selling through ShopManager
+		local success = ShopManager.handleUnitSell(userId, unitId, position)
+		
+		if success then
+			print("Player " .. player.Name .. " successfully sold unit " .. unitId .. " at position " .. tostring(position))
+		else
+			print("Player " .. player.Name .. " failed to sell unit " .. unitId .. " at position " .. tostring(position))
+		end
+	end)
+
+
 
 	-- Sell unit handler
 	sellUnitEvent.OnServerEvent:Connect(function(player, unitId)
@@ -108,6 +134,35 @@ end)
 			updatePlayerDataEvent:FireClient(player, playerData)
 		end
 	end)
+	
+	-- Reset player data handler (for testing)
+	local resetPlayerDataEvent = RemoteEvents.getEvent("ResetPlayerData")
+	if resetPlayerDataEvent then
+		resetPlayerDataEvent.OnServerEvent:Connect(function(player)
+			local userId = player.UserId
+			local success = PlayerDataManager.resetPlayerData(userId)
+			
+			if success then
+				-- Clear physical units
+				UnitSpawner.clearPlayerUnits(userId)
+				
+				-- Reinitialize player data
+				local newPlayerData = PlayerDataManager.loadPlayerData(userId, player.Name)
+				
+				-- Reinitialize shop
+				ShopManager.initializePlayerShop(userId)
+				
+				-- Send updates to client
+				ShopManager.sendBoardUpdate(userId)
+				ShopManager.sendBenchUpdate(userId)
+				updatePlayerDataEvent:FireClient(player, newPlayerData)
+				
+				print("Player " .. player.Name .. " data reset successfully")
+			else
+				print("Failed to reset player " .. player.Name .. " data")
+			end
+		end)
+	end
 end
 
 -- Set up player handlers
@@ -117,14 +172,48 @@ local function setupPlayerHandlers()
 		local userId = player.UserId
 		print("Player " .. player.Name .. " joined, initializing shop...")
 		
+		-- Load player data and restore board state
+		local playerData = PlayerDataManager.loadPlayerData(userId, player.Name)
+		
+		-- Restore physical units on board
+		if playerData and playerData.boardState and playerData.boardState.grid then
+			for position, unit in pairs(playerData.boardState.grid) do
+				UnitSpawner.spawnUnitOnBoard(userId, unit, position)
+			end
+		end
+		
+		-- Restore physical units on bench
+		if playerData and playerData.benchState and playerData.benchState.units then
+			for unitId, unit in pairs(playerData.benchState.units) do
+				local benchSlot = Bench.getUnitSlot(playerData.benchState, unitId)
+				if benchSlot then
+					UnitSpawner.spawnUnitOnBench(userId, unit, benchSlot)
+				end
+			end
+		end
+		
 		-- Initialize shop after a short delay to ensure player data is loaded
 		wait(1)
 		ShopManager.initializePlayerShop(userId)
+		
+		-- Send board and bench updates to client
+		ShopManager.sendBoardUpdate(userId)
+		ShopManager.sendBenchUpdate(userId)
+		
+		-- Send player data update to client
+		local updatePlayerDataEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.UPDATE_PLAYER_DATA)
+		if updatePlayerDataEvent then
+			updatePlayerDataEvent:FireClient(player, playerData)
+		end
 	end)
 	
 	-- Player leaving
 	Players.PlayerRemoving:Connect(function(player)
 		local userId = player.UserId
+		
+		-- Save player data before cleanup
+		PlayerDataManager.savePlayerData(userId)
+		
 		ShopManager.cleanupPlayer(userId)
 		UnitSpawner.clearPlayerUnits(userId)
 	end)
