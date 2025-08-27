@@ -218,6 +218,12 @@ end
 function UI.placeUnitOnBoard(unit: DataStructures.Unit, position: Vector2)
 	if not boardFrame then return end
 	
+	-- Validate position
+	if not position or not position.X or not position.Y then
+		warn("Invalid position in placeUnitOnBoard:", position)
+		return
+	end
+	
 	local hexName = string.format("Hex_%d_%d", position.Y + 1, position.X + 1)
 	local hex = boardFrame:FindFirstChild(hexName)
 	
@@ -225,7 +231,7 @@ function UI.placeUnitOnBoard(unit: DataStructures.Unit, position: Vector2)
 		-- Create unit visual
 		local unitVisual = Instance.new("ImageButton")
 		unitVisual.Size = UDim2.new(0.8, 0, 0.8, 0)
-		unitVisual.Position = UDim2.new(0.1, 0, 0.1, 0)
+		unitVisual.Position = UDim2.new(0.1, 0, 0, 0) -- Position at top of hex
 		unitVisual.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
 		unitVisual.BorderSizePixel = 0
 		unitVisual.Image = unit.imageAssetId -- Use unit's image
@@ -259,6 +265,12 @@ end
 function UI.placeUnitOnBench(unit: DataStructures.Unit, benchSlot: number)
 	if not benchFrame then return end
 	
+	-- Validate bench slot
+	if not benchSlot or benchSlot <= 0 then
+		warn("Invalid bench slot in placeUnitOnBench:", benchSlot)
+		return
+	end
+	
 	local hexName = string.format("BenchHex_%d", benchSlot)
 	local hex = benchFrame:FindFirstChild(hexName)
 	
@@ -266,7 +278,7 @@ function UI.placeUnitOnBench(unit: DataStructures.Unit, benchSlot: number)
 		-- Create unit visual
 		local unitVisual = Instance.new("ImageButton")
 		unitVisual.Size = UDim2.new(0.8, 0, 0.8, 0)
-		unitVisual.Position = UDim2.new(0.1, 0, 0.1, 0)
+		unitVisual.Position = UDim2.new(0.1, 0, 0, 0) -- Position at top of hex
 		unitVisual.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
 		unitVisual.BorderSizePixel = 0
 		unitVisual.Image = unit.imageAssetId -- Use unit's image
@@ -299,6 +311,12 @@ end
 function UI.updateBoardDisplay(boardState: DataStructures.BoardState)
 	if not boardFrame then return end
 	
+	-- Validate board state
+	if not boardState or not boardState.grid then
+		warn("Invalid board state in updateBoardDisplay")
+		return
+	end
+	
 	-- Clear existing units
 	for _, child in pairs(boardFrame:GetChildren()) do
 		if child:IsA("ImageButton") and child.Name:find("Hex_") then
@@ -313,13 +331,21 @@ function UI.updateBoardDisplay(boardState: DataStructures.BoardState)
 	
 	-- Place units from board state
 	for position, unit in pairs(boardState.grid) do
-		UI.placeUnitOnBoard(unit, position)
+		if position and unit then
+			UI.placeUnitOnBoard(unit, position)
+		end
 	end
 end
 
 -- Function to update bench display
 function UI.updateBenchDisplay(benchState: DataStructures.BenchState)
 	if not benchFrame then return end
+	
+	-- Validate bench state
+	if not benchState or not benchState.units or not benchState.maxCapacity then
+		warn("Invalid bench state in updateBenchDisplay")
+		return
+	end
 	
 	-- Clear existing units
 	for _, child in pairs(benchFrame:GetChildren()) do
@@ -336,7 +362,9 @@ function UI.updateBenchDisplay(benchState: DataStructures.BenchState)
 	-- Place units from bench state in sequential order
 	local units = {}
 	for unitId, unit in pairs(benchState.units) do
-		table.insert(units, unit)
+		if unit then
+			table.insert(units, unit)
+		end
 	end
 	
 	-- Sort units by their unique ID to maintain consistent order
