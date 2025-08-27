@@ -102,9 +102,6 @@ function UI.createMainUI()
 			UI.sellSelectedUnit()
 		end)
 	end
-
-	sellUnitTitle = sellUnitFrame:FindFirstChild("SellUnitTitle")
-	sellUnitTitle.Font = Enum.Font.GothamBold
 	
 	print("UI created successfully from template!")
 end
@@ -251,6 +248,32 @@ function UI.placeUnitOnBoard(unit: DataStructures.Unit, position: Vector2)
 	elseif typeof(position) == "table" then
 		x = position.X or position.x
 		y = position.Y or position.y
+	elseif typeof(position) == "string" then
+		-- Handle string representation of Vector2 (e.g., "<Vector2> (0, 2)")
+		print("Parsing string position:", position)
+		
+		-- Extract numbers from parentheses only: (x, y)
+		local match = string.match(position, "%(([^%)]+)%)")
+		if match then
+			print("Extracted content from parentheses:", match)
+			-- Split by comma and extract numbers
+			local parts = {}
+			for part in string.gmatch(match, "[^,]+") do
+				table.insert(parts, part:match("^%s*(%-?%d+)%s*$"))
+			end
+			print("Parts after splitting:", table.concat(parts, ", "))
+			if #parts >= 2 and parts[1] and parts[2] then
+				x = tonumber(parts[1])
+				y = tonumber(parts[2])
+				print("Parsed coordinates:", x, y)
+			else
+				warn("Failed to parse Vector2 string:", position)
+				return
+			end
+		else
+			warn("Failed to find parentheses in Vector2 string:", position)
+			return
+		end
 	else
 		warn("Invalid position type in placeUnitOnBoard:", typeof(position), position)
 		return
@@ -263,9 +286,31 @@ function UI.placeUnitOnBoard(unit: DataStructures.Unit, position: Vector2)
 	
 	-- Position validation successful
 	
-	local hexName = string.format("Hex_%d_%d", y + 1, x + 1)
+	-- Convert from bottom-up coordinates to hex naming
+	-- Hex names are in bottom-up format: (bottomUpRow, col)
+	-- where bottomUpRow = rows - row + 1
+	-- For position (0,0) bottom-left: hexRow = 1, hexCol = 1 -> Hex_1_1
+	-- For position (0,1) second row: hexRow = 2, hexCol = 1 -> Hex_2_1
+	-- For position (0,3) top-left: hexRow = 4, hexCol = 1 -> Hex_4_1
+	local hexRow = y + 1
+	local hexCol = x + 1
+	
+	local hexName = string.format("Hex_%d_%d", hexRow, hexCol)
 	local hex = boardFrame:FindFirstChild(hexName)
 	-- Hex lookup completed
+	
+	print("Looking for hex:", hexName, "Found:", hex ~= nil)
+	print("  Position:", x, y, "-> hexRow:", hexRow, "hexCol:", hexCol)
+	
+	-- Debug: List all hexes in boardFrame
+	if not hex then
+		print("Available hexes in boardFrame:")
+		for _, child in pairs(boardFrame:GetChildren()) do
+			if child.Name:find("Hex_") then
+				print("  ", child.Name)
+			end
+		end
+	end
 	
 	if hex then
 		-- Create unit visual
@@ -296,6 +341,11 @@ function UI.placeUnitOnBoard(unit: DataStructures.Unit, position: Vector2)
 		unitVisual:SetAttribute("UnitImageAssetId", unit.imageAssetId)
 		unitVisual:SetAttribute("PositionX", x)
 		unitVisual:SetAttribute("PositionY", y)
+		
+		-- Add click handler for unit selection
+		unitVisual.MouseButton1Click:Connect(function()
+			UI.selectUnit(unitVisual, hex)
+		end)
 		
 		print("Unit placed on board at position:", position)
 	end
@@ -343,6 +393,11 @@ function UI.placeUnitOnBench(unit: DataStructures.Unit, benchSlot: number)
 		unitVisual:SetAttribute("UnitImageAssetId", unit.imageAssetId)
 		unitVisual:SetAttribute("BenchSlot", benchSlot)
 		
+		-- Add click handler for unit selection (bench units can also be selected)
+		unitVisual.MouseButton1Click:Connect(function()
+			UI.selectUnit(unitVisual, hex)
+		end)
+		
 		print("Unit placed on bench at slot:", benchSlot)
 	end
 end
@@ -356,6 +411,13 @@ function UI.updateBoardDisplay(boardState: DataStructures.BoardState)
 		warn("Invalid board state in updateBoardDisplay")
 		return
 	end
+	
+	-- Count units in board state
+	local unitCount = 0
+	for _ in pairs(boardState.grid) do
+		unitCount = unitCount + 1
+	end
+	print("Updating board display with", unitCount, "units")
 	
 	-- Board update started
 	
@@ -377,7 +439,10 @@ function UI.updateBoardDisplay(boardState: DataStructures.BoardState)
 	-- Place units from board state
 	for position, unit in pairs(boardState.grid) do
 		if position and unit then
+			print("Placing unit", unit.name, "at position", position)
 			UI.placeUnitOnBoard(unit, position)
+		else
+			print("Skipping invalid position or unit:", position, unit)
 		end
 	end
 end
@@ -391,6 +456,8 @@ function UI.updateBenchDisplay(benchState: DataStructures.BenchState)
 		warn("Invalid bench state in updateBenchDisplay")
 		return
 	end
+	
+	print("Updating bench display with", benchState.currentCapacity, "units")
 	
 	-- Clear existing units
 	for _, child in pairs(benchFrame:GetChildren()) do
@@ -420,6 +487,7 @@ function UI.updateBenchDisplay(benchState: DataStructures.BenchState)
 	-- Place units in sequential slots
 	for i, unit in ipairs(units) do
 		if i <= benchState.maxCapacity then
+			print("Placing bench unit", unit.name, "at slot", i)
 			UI.placeUnitOnBench(unit, i)
 		end
 	end
@@ -469,6 +537,8 @@ end
 
 -- Function to select a unit on the board
 function UI.selectUnit(unitVisual: GuiObject, hex: GuiObject)
+	print("Selecting unit:", unitVisual:GetAttribute("UnitName"))
+	
 	-- Clear previous selection
 	UI.clearSelection()
 	
@@ -481,11 +551,13 @@ function UI.selectUnit(unitVisual: GuiObject, hex: GuiObject)
 		unitVisual.BackgroundColor3 = Color3.fromRGB(255, 255, 0) -- Yellow highlight
 		unitVisual.BorderSizePixel = 2
 		unitVisual.BorderColor3 = Color3.fromRGB(255, 255, 0)
+		print("Unit highlighted in yellow")
 	end
 	
 	-- Show sell area when board is visible
 	if boardVisible and sellUnitFrame then
 		sellUnitFrame.Visible = true
+		print("Sell area made visible")
 	end
 end
 
@@ -525,14 +597,14 @@ function UI.handleHexClick(hex: GuiObject, position: Vector2)
 		return
 	end
 	
-	-- If we clicked on a hex with a unit and no unit is selected
-	if unitVisual and not selectedUnit then
-		UI.selectUnit(unitVisual, hex)
+	-- If we clicked on an empty hex, clear selection
+	if not unitVisual then
+		UI.clearSelection()
 		return
 	end
 	
-	-- If we clicked on the same hex or an empty hex, clear selection
-	UI.clearSelection()
+	-- If we clicked on a hex with a unit, select it (but unit click will handle this)
+	-- This is mainly for movement logic
 end
 
 -- Function to move a unit
@@ -544,8 +616,23 @@ function UI.moveUnit(unitVisual: GuiObject, fromHex: GuiObject, toHex: GuiObject
 	local unitName = unitVisual:GetAttribute("UnitName")
 	local unitTier = unitVisual:GetAttribute("UnitTier")
 	local unitImageAssetId = unitVisual:GetAttribute("UnitImageAssetId")
+	
+	-- Check if this is a bench unit or board unit
+	local benchSlot = unitVisual:GetAttribute("BenchSlot")
 	local fromX = unitVisual:GetAttribute("PositionX")
 	local fromY = unitVisual:GetAttribute("PositionY")
+	
+	-- Determine from position
+	local fromPosition
+	if benchSlot then
+		-- This is a bench unit, use negative bench slot as X coordinate
+		fromPosition = Vector2.new(-benchSlot, 0)
+		print("Moving bench unit from slot:", benchSlot, "to board position:", toPosition)
+	else
+		-- This is a board unit
+		fromPosition = Vector2.new(fromX, fromY)
+		print("Moving board unit from:", fromPosition, "to:", toPosition)
+	end
 	
 	-- Check if there's a unit in the destination hex
 	local targetUnitVisual = nil
@@ -565,7 +652,6 @@ function UI.moveUnit(unitVisual: GuiObject, fromHex: GuiObject, toHex: GuiObject
 	}
 	
 	-- Send move request to server
-	local fromPosition = Vector2.new(fromX, fromY)
 	UI.requestUnitMove(unit, fromPosition, toPosition)
 end
 
@@ -584,11 +670,23 @@ function UI.sellSelectedUnit()
 	if not selectedUnit then return end
 	
 	local unitId = selectedUnit:GetAttribute("UnitId")
+	local benchSlot = selectedUnit:GetAttribute("BenchSlot")
 	local positionX = selectedUnit:GetAttribute("PositionX")
 	local positionY = selectedUnit:GetAttribute("PositionY")
 	
-	if unitId and positionX and positionY then
-		local position = Vector2.new(positionX, positionY)
+	if unitId then
+		local position
+		if benchSlot then
+			-- This is a bench unit, use negative bench slot as position
+			position = Vector2.new(-benchSlot, 0)
+		elseif positionX and positionY then
+			-- This is a board unit
+			position = Vector2.new(positionX, positionY)
+		else
+			warn("Invalid unit position for selling")
+			return
+		end
+		
 		UI.requestUnitSell(unitId, position)
 		UI.clearSelection()
 	end
@@ -671,14 +769,26 @@ function UI.createBoardHexes()
 			hex.Size = UDim2.new(hexWidth, 0, hexHeight, 0)
 			hex.BackgroundTransparency = 1
 			hex.Image = "rbxassetid://135628423497794"
-			hex.Name = string.format("Hex_%d_%d", row, col)
+			
+			-- Convert to bottom-up coordinate system for hex naming
+			-- UI rows start from top (1) and go down, but we want bottom-up coordinates
+			local bottomUpRow = rows - row + 1
+			hex.Name = string.format("Hex_%d_%d", bottomUpRow, col)
+			
+			-- Debug: Print hex names for first few hexes
+			if row <= 2 and col <= 3 then
+				print("Created hex:", hex.Name, "at row:", row, "col:", col, "bottomUpRow:", bottomUpRow)
+			end
+			
+			-- Debug: Print all hex names
+			print("Created hex:", hex.Name, "at row:", row, "col:", col, "bottomUpRow:", bottomUpRow)
 			
 			-- Aspect ratio lock
 			local constraint = Instance.new("UIAspectRatioConstraint")
 			constraint.AspectRatio = aspectRatio
 			constraint.Parent = hex
 			
-			-- Base pos
+			-- Base pos (visual positioning remains the same)
 			local posX = (col - 1) * hexWidth
 			local posY = (row - 1) * (hexHeight * 0.88)
 			
@@ -695,7 +805,8 @@ function UI.createBoardHexes()
 			hex.Parent = boardFrame
 			
 			-- Add click handler for unit selection/movement
-			local position = Vector2.new(col - 1, row - 1)
+			-- Convert to bottom-up coordinate system: (col-1, rows-row)
+			local position = Vector2.new(col - 1, rows - row)
 			hex.MouseButton1Click:Connect(function()
 				UI.handleHexClick(hex, position)
 			end)

@@ -112,6 +112,32 @@ function Bench.getUnitSlot(benchState: BenchState, unitId: string): number?
 	return nil
 end
 
+-- Function to get a unit at a specific bench slot
+function Bench.getUnitAtSlot(benchState: BenchState, slot: number): Unit?
+	local slotIndex = 1
+	for unitId, unit in pairs(benchState.units) do
+		if slotIndex == slot then
+			return unit
+		end
+		slotIndex = slotIndex + 1
+	end
+	return nil
+end
+
+-- Function to remove a unit from a specific bench slot
+function Bench.removeUnitFromSlot(benchState: BenchState, slot: number): boolean
+	local slotIndex = 1
+	for unitId, unit in pairs(benchState.units) do
+		if slotIndex == slot then
+			benchState.units[unitId] = nil
+			benchState.currentCapacity = benchState.currentCapacity - 1
+			return true
+		end
+		slotIndex = slotIndex + 1
+	end
+	return false
+end
+
 -- Function to validate bench state
 function Bench.validateBenchState(benchState: BenchState): boolean
 	-- Check if current capacity matches actual units

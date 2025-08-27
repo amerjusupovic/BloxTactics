@@ -228,6 +228,19 @@ function ShopManager.handleUnitMove(userId: number, fromPosition: Vector2, toPos
 	local playerData = PlayerDataManager.getPlayerData(userId)
 	if not playerData then return false end
 	
+	-- Check if this is a bench-to-board move (fromPosition.X < 0 indicates bench)
+	if fromPosition.X < 0 then
+		return ShopManager.handleBenchToBoardMove(userId, fromPosition, toPosition)
+	else
+		return ShopManager.handleBoardToBoardMove(userId, fromPosition, toPosition)
+	end
+end
+
+-- Function to handle board-to-board movement
+function ShopManager.handleBoardToBoardMove(userId: number, fromPosition: Vector2, toPosition: Vector2): boolean
+	local playerData = PlayerDataManager.getPlayerData(userId)
+	if not playerData then return false end
+	
 	-- Validate positions
 	if not Board.isValidPosition(fromPosition) or not Board.isValidPosition(toPosition) then
 		ShopManager.sendNotification(userId, "Invalid position!", 3)
@@ -274,8 +287,110 @@ function ShopManager.handleUnitMove(userId: number, fromPosition: Vector2, toPos
 	end
 end
 
+-- Function to handle bench-to-board movement
+function ShopManager.handleBenchToBoardMove(userId: number, fromPosition: Vector2, toPosition: Vector2): boolean
+	local playerData = PlayerDataManager.getPlayerData(userId)
+	if not playerData then return false end
+	
+	-- Validate board position
+	if not Board.isValidPosition(toPosition) then
+		ShopManager.sendNotification(userId, "Invalid board position!", 3)
+		return false
+	end
+	
+	-- Extract bench slot from fromPosition (X is negative bench slot)
+	local benchSlot = math.abs(fromPosition.X)
+	
+	-- Check if bench slot has a unit
+	local benchUnit = Bench.getUnitAtSlot(playerData.benchState, benchSlot)
+	if not benchUnit then
+		ShopManager.sendNotification(userId, "No unit at bench slot!", 3)
+		return false
+	end
+	
+	-- Check if board position is occupied
+	local boardUnit = Board.getUnitAtPosition(playerData.boardState, toPosition)
+	
+	if boardUnit then
+		-- Swap: bench unit to board, board unit to bench
+		local success = Bench.removeUnitFromSlot(playerData.benchState, benchSlot)
+		if success then
+			-- Add board unit to bench
+			local benchSuccess, newBenchSlot = Bench.addUnit(playerData.benchState, boardUnit)
+			if benchSuccess then
+				-- Place bench unit on board
+				Board.placeUnit(playerData.boardState, benchUnit, toPosition)
+				
+				-- Update physical units
+				UnitSpawner.removeUnitFromBench(userId, benchSlot)
+				UnitSpawner.removeUnitFromBoard(userId, toPosition)
+				UnitSpawner.spawnUnitOnBoard(userId, benchUnit, toPosition)
+				UnitSpawner.spawnUnitOnBench(userId, boardUnit, newBenchSlot)
+				
+				-- Save player data
+				PlayerDataManager.savePlayerData(userId)
+				
+				-- Update client (send bench update first, then board update)
+				ShopManager.sendBenchUpdate(userId)
+				wait(0.1) -- Small delay to ensure bench update is processed first
+				ShopManager.sendBoardUpdate(userId)
+				ShopManager.sendNotification(userId, "Units swapped successfully!", 2)
+				
+				return true
+			end
+		end
+	else
+		-- Simple move: bench unit to board
+		local success = Bench.removeUnitFromSlot(playerData.benchState, benchSlot)
+		if success then
+			print("Removed unit from bench slot", benchSlot)
+			
+			-- Place unit on board
+			local placeSuccess = Board.placeUnit(playerData.boardState, benchUnit, toPosition)
+			if placeSuccess then
+				print("Placed unit on board at position", toPosition)
+			else
+				print("Failed to place unit on board at position", toPosition)
+			end
+			
+			-- Update physical units
+			UnitSpawner.removeUnitFromBench(userId, benchSlot)
+			UnitSpawner.spawnUnitOnBoard(userId, benchUnit, toPosition)
+			
+			-- Save player data
+			PlayerDataManager.savePlayerData(userId)
+			
+			-- Update client (send bench update first, then board update)
+			ShopManager.sendBenchUpdate(userId)
+			wait(0.1) -- Small delay to ensure bench update is processed first
+			ShopManager.sendBoardUpdate(userId)
+			ShopManager.sendNotification(userId, "Unit moved from bench to board!", 2)
+			
+			return true
+		else
+			print("Failed to remove unit from bench slot", benchSlot)
+		end
+	end
+	
+	ShopManager.sendNotification(userId, "Failed to move unit from bench!", 3)
+	return false
+end
+
 -- Function to handle unit selling
 function ShopManager.handleUnitSell(userId: number, unitId: string, position: Vector2): boolean
+	local playerData = PlayerDataManager.getPlayerData(userId)
+	if not playerData then return false end
+	
+	-- Check if this is a bench unit sell (position.X < 0 indicates bench)
+	if position.X < 0 then
+		return ShopManager.handleBenchUnitSell(userId, unitId, position)
+	else
+		return ShopManager.handleBoardUnitSell(userId, unitId, position)
+	end
+end
+
+-- Function to handle board unit selling
+function ShopManager.handleBoardUnitSell(userId: number, unitId: string, position: Vector2): boolean
 	local playerData = PlayerDataManager.getPlayerData(userId)
 	if not playerData then return false end
 	
@@ -298,8 +413,8 @@ function ShopManager.handleUnitSell(userId: number, unitId: string, position: Ve
 		return false
 	end
 	
-	-- Calculate sell value (based on tier)
-	local sellValue = (unit.cost * tier) - (math.abs(tier - 1))
+	-- Calculate sell value (half the cost)
+	local sellValue = math.floor(unit.cost / 2)
 	
 	-- Remove unit from board
 	local removedUnit = Board.removeUnit(playerData.boardState, position)
@@ -315,6 +430,53 @@ function ShopManager.handleUnitSell(userId: number, unitId: string, position: Ve
 		
 		-- Update client
 		ShopManager.sendBoardUpdate(userId)
+		ShopManager.sendNotification(userId, "Unit sold for " .. sellValue .. " gold!", 2)
+		
+		return true
+	else
+		ShopManager.sendNotification(userId, "Failed to sell unit!", 3)
+		return false
+	end
+end
+
+-- Function to handle bench unit selling
+function ShopManager.handleBenchUnitSell(userId: number, unitId: string, position: Vector2): boolean
+	local playerData = PlayerDataManager.getPlayerData(userId)
+	if not playerData then return false end
+	
+	-- Extract bench slot from position (X is negative bench slot)
+	local benchSlot = math.abs(position.X)
+	
+	-- Check if bench slot has a unit
+	local unit = Bench.getUnitAtSlot(playerData.benchState, benchSlot)
+	if not unit then
+		ShopManager.sendNotification(userId, "No unit at bench slot!", 3)
+		return false
+	end
+	
+	-- Verify unit ID matches
+	if unit.id ~= unitId then
+		ShopManager.sendNotification(userId, "Unit ID mismatch!", 3)
+		return false
+	end
+	
+	-- Calculate sell value (half the cost)
+	local sellValue = math.floor(unit.cost / 2)
+	
+	-- Remove unit from bench
+	local success = Bench.removeUnitFromSlot(playerData.benchState, benchSlot)
+	if success then
+		-- Add gold to player
+		PlayerDataManager.addGold(userId, sellValue)
+		
+		-- Remove physical unit
+		UnitSpawner.removeUnitFromBench(userId, benchSlot)
+		
+		-- Save player data
+		PlayerDataManager.savePlayerData(userId)
+		
+		-- Update client
+		ShopManager.sendBenchUpdate(userId)
 		ShopManager.sendNotification(userId, "Unit sold for " .. sellValue .. " gold!", 2)
 		
 		return true

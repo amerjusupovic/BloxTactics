@@ -94,22 +94,6 @@ end)
 		end
 	end)
 
-
-
-	-- Sell unit handler
-	sellUnitEvent.OnServerEvent:Connect(function(player, unitId)
-		local userId = player.UserId
-		local playerData = PlayerDataManager.getPlayerData(userId)
-
-		if not playerData then
-			return
-		end
-
-		-- Handle unit selling logic here
-		-- This will be implemented in Phase 3
-		print("Player " .. player.Name .. " attempted to sell unit " .. unitId)
-	end)
-
 	-- Refresh shop handler
 	refreshShopEvent.OnServerEvent:Connect(function(player)
 		local userId = player.UserId
