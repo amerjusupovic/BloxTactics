@@ -9,6 +9,9 @@ local Shop = require(script.Parent.Server.Shop)
 local Board = require(script.Parent.Server.Board)
 local Bench = require(script.Parent.Server.Bench)
 local RemoteEvents = require(script.Parent.Server.RemoteEvents)
+local ShopManager = require(script.Parent.Server.ShopManager)
+local UnitSpawner = require(script.Parent.Server.UnitSpawner)
+local Players = game:GetService("Players")
 
 -- Load shared modules
 local Constants = require(game.ReplicatedStorage.Shared.Constants)
@@ -26,18 +29,18 @@ local function setupRemoteEventHandlers()
 	local updatePlayerDataEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.UPDATE_PLAYER_DATA)
 
 	-- Purchase unit handler
-	purchaseUnitEvent.OnServerEvent:Connect(function(player, unitIndex)
-		local userId = player.UserId
-		local playerData = PlayerDataManager.getPlayerData(userId)
-
-		if not playerData then
-			return
-		end
-
-		-- Handle unit purchase logic here
-		-- This will be implemented in Phase 2
-		print("Player " .. player.Name .. " attempted to purchase unit at index " .. unitIndex)
-	end)
+purchaseUnitEvent.OnServerEvent:Connect(function(player, unitIndex)
+	local userId = player.UserId
+	
+	-- Handle unit purchase through ShopManager
+	local success = ShopManager.handleUnitPurchase(userId, unitIndex)
+	
+	if success then
+		print("Player " .. player.Name .. " successfully purchased unit at index " .. unitIndex)
+	else
+		print("Player " .. player.Name .. " failed to purchase unit at index " .. unitIndex)
+	end
+end)
 
 	-- Place unit handler
 	placeUnitEvent.OnServerEvent:Connect(function(player, unitId, position)
@@ -107,12 +110,35 @@ local function setupRemoteEventHandlers()
 	end)
 end
 
+-- Set up player handlers
+local function setupPlayerHandlers()
+	-- Player joining
+	Players.PlayerAdded:Connect(function(player)
+		local userId = player.UserId
+		print("Player " .. player.Name .. " joined, initializing shop...")
+		
+		-- Initialize shop after a short delay to ensure player data is loaded
+		wait(1)
+		ShopManager.initializePlayerShop(userId)
+	end)
+	
+	-- Player leaving
+	Players.PlayerRemoving:Connect(function(player)
+		local userId = player.UserId
+		ShopManager.cleanupPlayer(userId)
+		UnitSpawner.clearPlayerUnits(userId)
+	end)
+end
+
 -- Initialize game systems
 local function initializeGame()
 	print("Initializing BloxTactics game systems...")
 	
 	-- Set up RemoteEvent handlers
 	setupRemoteEventHandlers()
+	
+	-- Set up player joining/leaving handlers
+	setupPlayerHandlers()
 	
 	print("Game systems initialized!")
 end

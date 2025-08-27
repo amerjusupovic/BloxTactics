@@ -58,8 +58,8 @@ function PlayerDataManager.loadPlayerData(userId: number, username: string): Pla
 	end)
 	
 	if success and data then
-		-- Validate and update data structure if needed
-		local playerData = data
+		-- Deserialize the data from DataStore
+		local playerData = PlayerDataManager.deserializePlayerData(data)
 		
 		-- Ensure all required fields exist
 		if not playerData.boardState then
@@ -94,6 +94,117 @@ function PlayerDataManager.loadPlayerData(userId: number, username: string): Pla
 end
 
 -- Function to save player data
+-- Function to serialize player data for DataStore
+function PlayerDataManager.serializePlayerData(playerData: PlayerData): {[string]: any}
+	local serialized = {
+		userId = playerData.userId,
+		level = playerData.level,
+		experience = playerData.experience,
+		gold = playerData.gold,
+		streak = playerData.streak,
+		lastUpdated = playerData.lastUpdated
+	}
+	
+	-- Serialize board state
+	serialized.boardState = {
+		grid = {},
+		maxUnits = playerData.boardState.maxUnits,
+		currentUnits = playerData.boardState.currentUnits
+	}
+	for position, unit in pairs(playerData.boardState.grid) do
+		-- Convert Vector2 to string for storage
+		local posKey = tostring(position.X) .. "," .. tostring(position.Y)
+		serialized.boardState.grid[posKey] = {
+			id = unit.id,
+			name = unit.name,
+			cost = unit.cost,
+			tier = unit.tier,
+			imageAssetId = unit.imageAssetId,
+			stats = unit.stats,
+			abilities = unit.abilities
+		}
+	end
+	
+	-- Serialize bench state
+	serialized.benchState = {
+		units = {},
+		maxCapacity = playerData.benchState.maxCapacity,
+		currentCapacity = playerData.benchState.currentCapacity
+	}
+	for unitId, unit in pairs(playerData.benchState.units) do
+		serialized.benchState.units[unitId] = {
+			id = unit.id,
+			name = unit.name,
+			cost = unit.cost,
+			tier = unit.tier,
+			imageAssetId = unit.imageAssetId,
+			stats = unit.stats,
+			abilities = unit.abilities
+		}
+	end
+	
+	return serialized
+end
+
+-- Function to deserialize player data from DataStore
+function PlayerDataManager.deserializePlayerData(serialized: {[string]: any}): PlayerData
+	local playerData = {
+		userId = serialized.userId,
+		level = serialized.level,
+		experience = serialized.experience,
+		gold = serialized.gold,
+		streak = serialized.streak,
+		lastUpdated = serialized.lastUpdated
+	}
+	
+	-- Deserialize board state
+	playerData.boardState = {
+		grid = {},
+		maxUnits = serialized.boardState and serialized.boardState.maxUnits or Constants.MAX_BOARD_UNITS,
+		currentUnits = serialized.boardState and serialized.boardState.currentUnits or 0
+	}
+	if serialized.boardState and serialized.boardState.grid then
+		for posKey, unitData in pairs(serialized.boardState.grid) do
+			-- Convert string back to Vector2
+			local x, y = posKey:match("([^,]+),([^,]+)")
+			local position = Vector2.new(tonumber(x), tonumber(y))
+			
+			playerData.boardState.grid[position] = {
+				id = unitData.id,
+				name = unitData.name,
+				cost = unitData.cost,
+				tier = unitData.tier,
+				imageAssetId = unitData.imageAssetId,
+				stats = unitData.stats,
+				abilities = unitData.abilities,
+				position = position
+			}
+		end
+	end
+	
+	-- Deserialize bench state
+	playerData.benchState = {
+		units = {},
+		maxCapacity = serialized.benchState and serialized.benchState.maxCapacity or Constants.BENCH_CAPACITY,
+		currentCapacity = serialized.benchState and serialized.benchState.currentCapacity or 0
+	}
+	if serialized.benchState and serialized.benchState.units then
+		for unitId, unitData in pairs(serialized.benchState.units) do
+			playerData.benchState.units[unitId] = {
+				id = unitData.id,
+				name = unitData.name,
+				cost = unitData.cost,
+				tier = unitData.tier,
+				imageAssetId = unitData.imageAssetId,
+				stats = unitData.stats,
+				abilities = unitData.abilities
+			}
+		end
+	end
+	
+	return playerData
+end
+
 function PlayerDataManager.savePlayerData(userId: number): boolean
 	local playerData = playerDataCache[userId]
 	if not playerData then
@@ -102,8 +213,11 @@ function PlayerDataManager.savePlayerData(userId: number): boolean
 	
 	playerData.lastUpdated = os.time()
 	
+	-- Serialize player data before saving
+	local serializedData = PlayerDataManager.serializePlayerData(playerData)
+	
 	local success, error = pcall(function()
-		playerDataStore:SetAsync(tostring(userId), playerData)
+		playerDataStore:SetAsync(tostring(userId), serializedData)
 	end)
 	
 	if not success then

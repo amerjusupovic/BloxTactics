@@ -29,9 +29,30 @@ local function setupRemoteEventHandlers()
 	updatePlayerDataEvent.OnClientEvent:Connect(function(playerData)
 		-- Update UI with new player data
 		UI.updatePlayerStats(playerData)
-
-		-- Update shop display (will be implemented in Phase 2)
-		-- UI.updateShopDisplay(playerData.shopUnits)
+	end)
+	
+	-- Handle shop updates
+	local updateShopEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.UPDATE_SHOP)
+	updateShopEvent.OnClientEvent:Connect(function(shopUnits)
+		UI.updateShopDisplay(shopUnits)
+	end)
+	
+	-- Handle board updates
+	local updateBoardEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.UPDATE_BOARD)
+	updateBoardEvent.OnClientEvent:Connect(function(boardState)
+		UI.updateBoardDisplay(boardState)
+	end)
+	
+	-- Handle bench updates
+	local updateBenchEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.UPDATE_BENCH)
+	updateBenchEvent.OnClientEvent:Connect(function(benchState)
+		UI.updateBenchDisplay(benchState)
+	end)
+	
+	-- Handle notifications
+	local showNotificationEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
+	showNotificationEvent.OnClientEvent:Connect(function(message, duration)
+		UI.showNotification(message, duration)
 	end)
 end
 

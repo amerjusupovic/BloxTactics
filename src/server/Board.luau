@@ -27,11 +27,20 @@ end
 
 -- Function to check if a position is occupied
 function Board.isPositionOccupied(boardState: BoardState, position: Vector2): boolean
+	if not boardState or not boardState.grid then
+		return false
+	end
 	return boardState.grid[position] ~= nil
 end
 
 -- Function to place a unit on the board
 function Board.placeUnit(boardState: BoardState, unit: Unit, position: Vector2): boolean
+	-- Validate board state
+	if not boardState or not boardState.grid then
+		warn("Invalid board state in placeUnit")
+		return false
+	end
+	
 	-- Validate position
 	if not Board.isValidPosition(position) then
 		return false
@@ -42,7 +51,14 @@ function Board.placeUnit(boardState: BoardState, unit: Unit, position: Vector2):
 		return false
 	end
 	
-	-- Check if board is full
+	-- Check if board is full (with null safety)
+	if not boardState.currentUnits then
+		boardState.currentUnits = 0
+	end
+	if not boardState.maxUnits then
+		boardState.maxUnits = Constants.MAX_BOARD_UNITS
+	end
+	
 	if boardState.currentUnits >= boardState.maxUnits then
 		return false
 	end
@@ -57,11 +73,17 @@ end
 
 -- Function to remove a unit from the board
 function Board.removeUnit(boardState: BoardState, position: Vector2): Unit?
+	if not boardState or not boardState.grid then
+		return nil
+	end
+	
 	local unit = boardState.grid[position]
 	if unit then
 		boardState.grid[position] = nil
 		unit.position = nil
-		boardState.currentUnits = boardState.currentUnits - 1
+		if boardState.currentUnits then
+			boardState.currentUnits = math.max(0, boardState.currentUnits - 1)
+		end
 		return unit
 	end
 	return nil
@@ -128,11 +150,17 @@ end
 
 -- Function to check if board is empty
 function Board.isBoardEmpty(boardState: BoardState): boolean
+	if not boardState or not boardState.currentUnits then
+		return true
+	end
 	return boardState.currentUnits == 0
 end
 
 -- Function to check if board is full
 function Board.isBoardFull(boardState: BoardState): boolean
+	if not boardState or not boardState.currentUnits or not boardState.maxUnits then
+		return false
+	end
 	return boardState.currentUnits >= boardState.maxUnits
 end
 

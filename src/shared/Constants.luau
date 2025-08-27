@@ -56,7 +56,10 @@ Constants.REMOTE_EVENT_NAMES = {
 	REJECT_CHALLENGE = "RejectChallenge",
 	START_BATTLE = "StartBattle",
 	UPDATE_BOARD = "UpdateBoard",
-	UPDATE_PLAYER_DATA = "UpdatePlayerData"
+	UPDATE_PLAYER_DATA = "UpdatePlayerData",
+	UPDATE_SHOP = "UpdateShop",
+	UPDATE_BENCH = "UpdateBench",
+	SHOW_NOTIFICATION = "ShowNotification"
 }
 
 return Constants

@@ -29,7 +29,8 @@ export type Unit = {
 	stats: UnitStats,
 	abilities: {[string]: Ability},
 	position: Vector2?, -- position on board/bench
-	items: {[string]: Item}
+	items: {[string]: Item},
+	imageAssetId: string
 }
 
 -- Unit stats

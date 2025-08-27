@@ -20,10 +20,10 @@ function Bench.createBenchState(): BenchState
 end
 
 -- Function to add a unit to the bench
-function Bench.addUnit(benchState: BenchState, unit: Unit): boolean
+function Bench.addUnit(benchState: BenchState, unit: Unit): (boolean, string?)
 	-- Check if bench is full
 	if benchState.currentCapacity >= benchState.maxCapacity then
-		return false
+		return false, nil
 	end
 	
 	-- Generate unique ID for the unit
@@ -33,7 +33,7 @@ function Bench.addUnit(benchState: BenchState, unit: Unit): boolean
 	benchState.units[unitId] = unit
 	benchState.currentCapacity = benchState.currentCapacity + 1
 	
-	return true
+	return true, unitId
 end
 
 -- Function to remove a unit from the bench
@@ -98,6 +98,18 @@ function Bench.findUnitsByType(benchState: BenchState, unitType: string): {Unit}
 		end
 	end
 	return foundUnits
+end
+
+-- Function to get the bench slot number for a unit
+function Bench.getUnitSlot(benchState: BenchState, unitId: string): number?
+	local slotIndex = 1
+	for id, unit in pairs(benchState.units) do
+		if id == unitId then
+			return slotIndex
+		end
+		slotIndex = slotIndex + 1
+	end
+	return nil
 end
 
 -- Function to validate bench state
