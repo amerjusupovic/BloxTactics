@@ -179,7 +179,7 @@ end
 -- Function to remove unit from bench
 function UnitSpawner.removeUnitFromBench(userId: number, benchSlot: number)
 	local spawnPointsFolder = Workspace:FindFirstChild("SpawnPoints")
-	local playerFolder = spawnPointsFolder:FindFirstChild(tostring(userId))
+	local playerFolder = spawnPointsFolder and spawnPointsFolder:FindFirstChild(tostring(userId))
     if not playerFolder then return end
 	
 	local benchName = string.format("Bench_%d", benchSlot)
@@ -191,6 +191,47 @@ function UnitSpawner.removeUnitFromBench(userId: number, benchSlot: number)
 		if child:IsA("Model") and child.Name:find("_") then
 			child:Destroy()
 		end
+	end
+end
+
+-- Function to move unit between bench slots
+function UnitSpawner.moveUnitBetweenBenchSlots(userId: number, fromSlot: number, toSlot: number)
+	local spawnPointsFolder = Workspace:FindFirstChild("SpawnPoints")
+	local playerFolder = spawnPointsFolder and spawnPointsFolder:FindFirstChild(tostring(userId))
+    if not playerFolder then return end
+	
+	local fromBenchName = string.format("Bench_%d", fromSlot)
+	local toBenchName = string.format("Bench_%d", toSlot)
+	local fromBench = playerFolder:FindFirstChild(fromBenchName)
+	local toBench = playerFolder:FindFirstChild(toBenchName)
+	
+	if not fromBench or not toBench then return end
+	
+	-- Find the unit model in the source bench slot
+	local unitModel = nil
+	for _, child in pairs(fromBench:GetChildren()) do
+		if child:IsA("Model") and child.Name:find("_") then
+			unitModel = child
+			break
+		end
+	end
+	
+	if unitModel then
+		-- Update the bench slot attribute
+		unitModel:SetAttribute("BenchSlot", toSlot)
+		
+		-- Move the unit to the new bench slot
+		unitModel.Parent = toBench
+		
+		-- Reposition the unit at the new bench location
+		local benchCFrame = toBench.CFrame
+		local unitSize = unitModel:GetExtentsSize()
+		local unitHeight = unitSize.Y
+		local heightOffset = unitHeight / 2
+		local adjustedCFrame = CFrame.new(benchCFrame.Position + Vector3.new(0, heightOffset, 0))
+		unitModel:PivotTo(adjustedCFrame)
+		
+		print("Moved unit from bench slot", fromSlot, "to bench slot", toSlot)
 	end
 end
 

@@ -271,6 +271,17 @@ function ShopManager.handleBoardToBoardMove(userId: number, fromPosition: Vector
 	print("Board-to-board movement:")
 	print("  fromPosition:", fromPosition)
 	print("  sourceUnit:", sourceUnit and sourceUnit.name or "nil")
+	print("  Board grid contents:")
+	for pos, unit in pairs(playerData.boardState.grid) do
+		print("    Position:", pos, "Position type:", typeof(pos), "Unit:", unit.name)
+	end
+	print("  Trying to get unit at position:", fromPosition, "Position type:", typeof(fromPosition))
+	print("  Direct grid access:", playerData.boardState.grid[fromPosition] and playerData.boardState.grid[fromPosition].name or "nil")
+	
+	-- Check if the position exists as a string key
+	local positionString = tostring(fromPosition)
+	print("  Position as string:", positionString)
+	print("  String key access:", playerData.boardState.grid[positionString] and playerData.boardState.grid[positionString].name or "nil")
 	if not sourceUnit then
 		ShopManager.sendNotification(userId, "No unit at source position!", 3)
 		return false
@@ -361,9 +372,8 @@ function ShopManager.handleBenchToBenchMove(userId: number, fromPosition: Vector
 		-- Move unit to empty bench slot
 		local success = Bench.moveUnitToSlot(playerData.benchState, fromSlot, toSlot)
 		if success then
-			-- Update physical units
-			UnitSpawner.removeUnitFromBench(userId, fromSlot)
-			UnitSpawner.spawnUnitOnBench(userId, sourceUnit, toSlot)
+			-- Update physical units - move the existing unit between bench slots
+			UnitSpawner.moveUnitBetweenBenchSlots(userId, fromSlot, toSlot)
 			
 			-- Save player data
 			PlayerDataManager.savePlayerData(userId)
@@ -435,7 +445,7 @@ function ShopManager.handleBoardToBenchMove(userId: number, fromPosition: Vector
 		-- Move board unit to empty bench slot
 		local boardSuccess = Board.removeUnit(playerData.boardState, fromPosition)
 		if boardSuccess then
-			local benchSuccess = Bench.addUnit(playerData.benchState, boardUnit)
+			local benchSuccess = Bench.placeUnitInSlot(playerData.benchState, boardUnit, benchSlot)
 			if benchSuccess then
 				-- Update physical units
 				UnitSpawner.removeUnitFromBoard(userId, fromPosition)

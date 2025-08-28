@@ -103,6 +103,14 @@ function UI.createMainUI()
 		end)
 	end
 	
+	-- Add click handler for refresh button
+	local refreshButton = shopFrame:FindFirstChild("RefreshButton")
+	if refreshButton then
+		refreshButton.MouseButton1Click:Connect(function()
+			UI.handleShopRefresh()
+		end)
+	end
+	
 	print("UI created successfully from template!")
 end
 
@@ -215,6 +223,17 @@ function UI.handleUnitPurchase(unit: DataStructures.Unit, shopIndex: number)
 		purchaseUnitEvent:FireServer(shopIndex)
 	else
 		warn("PurchaseUnit RemoteEvent not found!")
+	end
+end
+
+-- Function to handle shop refresh
+function UI.handleShopRefresh()
+	-- Fire RemoteEvent to server
+	local refreshShopEvent = game.ReplicatedStorage.RemoteEvents:WaitForChild("RefreshShop")
+	if refreshShopEvent then
+		refreshShopEvent:FireServer()
+	else
+		warn("RefreshShop RemoteEvent not found!")
 	end
 end
 
@@ -471,7 +490,7 @@ function UI.updateBenchDisplay(benchState: DataStructures.BenchState)
 		end
 	end
 	
-	-- Place units from bench state in sequential order
+	-- Place units from bench state using their slot information
 	local units = {}
 	for unitId, unit in pairs(benchState.units) do
 		if unit then
@@ -479,16 +498,17 @@ function UI.updateBenchDisplay(benchState: DataStructures.BenchState)
 		end
 	end
 	
-	-- Sort units by their unique ID to maintain consistent order
+	-- Sort units by their slot to maintain correct order
 	table.sort(units, function(a, b)
-		return a.id < b.id
+		return (a.slot or 0) < (b.slot or 0)
 	end)
 	
-	-- Place units in sequential slots
-	for i, unit in ipairs(units) do
-		if i <= benchState.maxCapacity then
-			print("Placing bench unit", unit.name, "at slot", i)
-			UI.placeUnitOnBench(unit, i)
+	-- Place units in their correct slots
+	for _, unit in ipairs(units) do
+		local slot = unit.slot or 1
+		if slot <= benchState.maxCapacity then
+			print("Placing bench unit", unit.name, "at slot", slot)
+			UI.placeUnitOnBench(unit, slot)
 		end
 	end
 end

@@ -29,8 +29,12 @@ function Bench.addUnit(benchState: BenchState, unit: Unit): (boolean, string?)
 	-- Generate unique ID for the unit
 	local unitId = unit.id .. "_" .. os.time() .. "_" .. math.random(1000, 9999)
 	
-	-- Add unit to bench
+	-- Find the next available slot
+	local nextSlot = benchState.currentCapacity + 1
+	
+	-- Add unit to bench with slot information
 	benchState.units[unitId] = unit
+	unit.slot = nextSlot -- Store slot information in the unit
 	benchState.currentCapacity = benchState.currentCapacity + 1
 	
 	return true, unitId
@@ -102,38 +106,32 @@ end
 
 -- Function to get the bench slot number for a unit
 function Bench.getUnitSlot(benchState: BenchState, unitId: string): number?
-	local slotIndex = 1
 	for id, unit in pairs(benchState.units) do
 		if id == unitId then
-			return slotIndex
+			return unit.slot
 		end
-		slotIndex = slotIndex + 1
 	end
 	return nil
 end
 
 -- Function to get a unit at a specific bench slot
 function Bench.getUnitAtSlot(benchState: BenchState, slot: number): Unit?
-	local slotIndex = 1
 	for unitId, unit in pairs(benchState.units) do
-		if slotIndex == slot then
+		if unit.slot == slot then
 			return unit
 		end
-		slotIndex = slotIndex + 1
 	end
 	return nil
 end
 
 -- Function to remove a unit from a specific bench slot
 function Bench.removeUnitFromSlot(benchState: BenchState, slot: number): boolean
-	local slotIndex = 1
 	for unitId, unit in pairs(benchState.units) do
-		if slotIndex == slot then
+		if unit.slot == slot then
 			benchState.units[unitId] = nil
 			benchState.currentCapacity = benchState.currentCapacity - 1
 			return true
 		end
-		slotIndex = slotIndex + 1
 	end
 	return false
 end
@@ -148,8 +146,9 @@ function Bench.placeUnitInSlot(benchState: BenchState, unit: Unit, slot: number,
 	-- Use existing unit ID if provided, otherwise generate new one
 	local unitId = existingUnitId or (unit.id .. "_" .. os.time() .. "_" .. math.random(1000, 9999))
 	
-	-- Add unit to bench
+	-- Add unit to bench with slot information
 	benchState.units[unitId] = unit
+	unit.slot = slot -- Store slot information in the unit
 	benchState.currentCapacity = benchState.currentCapacity + 1
 	
 	return true
@@ -168,10 +167,16 @@ function Bench.moveUnitToSlot(benchState: BenchState, fromSlot: number, toSlot: 
 		return false
 	end
 	
-	-- Find the unit ID before removing it
+	-- Find the unit ID by iterating through units in order
 	local unitId = nil
 	local slotIndex = 1
+	local unitIds = {}
 	for id, _ in pairs(benchState.units) do
+		table.insert(unitIds, id)
+	end
+	table.sort(unitIds) -- Sort to ensure consistent order
+	
+	for _, id in ipairs(unitIds) do
 		if slotIndex == fromSlot then
 			unitId = id
 			break
@@ -200,11 +205,17 @@ function Bench.swapUnits(benchState: BenchState, slot1: number, slot2: number): 
 	local unit1 = Bench.getUnitAtSlot(benchState, slot1)
 	local unit2 = Bench.getUnitAtSlot(benchState, slot2)
 	
-	-- Find unit IDs before removing them
+	-- Find unit IDs by iterating through units in order
 	local unit1Id = nil
 	local unit2Id = nil
-	local slotIndex = 1
+	local unitIds = {}
 	for id, _ in pairs(benchState.units) do
+		table.insert(unitIds, id)
+	end
+	table.sort(unitIds) -- Sort to ensure consistent order
+	
+	local slotIndex = 1
+	for _, id in ipairs(unitIds) do
 		if slotIndex == slot1 then
 			unit1Id = id
 		elseif slotIndex == slot2 then

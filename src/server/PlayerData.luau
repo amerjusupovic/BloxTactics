@@ -139,7 +139,8 @@ function PlayerDataManager.serializePlayerData(playerData: PlayerData): {[string
 			tier = unit.tier,
 			imageAssetId = unit.imageAssetId,
 			stats = unit.stats,
-			abilities = unit.abilities
+			abilities = unit.abilities,
+			slot = unit.slot -- Save slot information
 		}
 	end
 	
@@ -163,24 +164,32 @@ function PlayerDataManager.deserializePlayerData(serialized: {[string]: any}): P
 		maxUnits = serialized.boardState and serialized.boardState.maxUnits or Constants.MAX_BOARD_UNITS,
 		currentUnits = serialized.boardState and serialized.boardState.currentUnits or 0
 	}
-	if serialized.boardState and serialized.boardState.grid then
-		for posKey, unitData in pairs(serialized.boardState.grid) do
-			-- Convert string back to Vector2
-			local x, y = posKey:match("([^,]+),([^,]+)")
-			local position = Vector2.new(tonumber(x), tonumber(y))
-			
-			playerData.boardState.grid[position] = {
-				id = unitData.id,
-				name = unitData.name,
-				cost = unitData.cost,
-				tier = unitData.tier,
-				imageAssetId = unitData.imageAssetId,
-				stats = unitData.stats,
-				abilities = unitData.abilities,
-				position = position
-			}
+			if serialized.boardState and serialized.boardState.grid then
+			for posKey, unitData in pairs(serialized.boardState.grid) do
+				-- Convert string back to Vector2
+				local parts = {}
+				for part in string.gmatch(posKey, "[^,]+") do
+					table.insert(parts, tonumber(part))
+				end
+				
+				if #parts >= 2 then
+					local position = Vector2.new(parts[1], parts[2])
+					
+					playerData.boardState.grid[position] = {
+						id = unitData.id,
+						name = unitData.name,
+						cost = unitData.cost,
+						tier = unitData.tier,
+						imageAssetId = unitData.imageAssetId,
+						stats = unitData.stats,
+						abilities = unitData.abilities,
+						position = position
+					}
+				else
+					warn("Failed to parse position key:", posKey)
+				end
+			end
 		end
-	end
 	
 	-- Deserialize bench state
 	playerData.benchState = {
@@ -197,7 +206,8 @@ function PlayerDataManager.deserializePlayerData(serialized: {[string]: any}): P
 				tier = unitData.tier,
 				imageAssetId = unitData.imageAssetId,
 				stats = unitData.stats,
-				abilities = unitData.abilities
+				abilities = unitData.abilities,
+				slot = unitData.slot -- Load slot information
 			}
 		end
 	end

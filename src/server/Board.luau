@@ -30,7 +30,20 @@ function Board.isPositionOccupied(boardState: BoardState, position: Vector2): bo
 	if not boardState or not boardState.grid then
 		return false
 	end
-	return boardState.grid[position] ~= nil
+	
+	-- Try direct access first
+	if boardState.grid[position] ~= nil then
+		return true
+	end
+	
+	-- If direct access fails, search by value
+	for gridPos, _ in pairs(boardState.grid) do
+		if typeof(gridPos) == "Vector2" and gridPos.X == position.X and gridPos.Y == position.Y then
+			return true
+		end
+	end
+	
+	return false
 end
 
 -- Function to place a unit on the board
@@ -77,6 +90,7 @@ function Board.removeUnit(boardState: BoardState, position: Vector2): Unit?
 		return nil
 	end
 	
+	-- Try direct access first
 	local unit = boardState.grid[position]
 	if unit then
 		boardState.grid[position] = nil
@@ -86,6 +100,19 @@ function Board.removeUnit(boardState: BoardState, position: Vector2): Unit?
 		end
 		return unit
 	end
+	
+	-- If direct access fails, search by value
+	for gridPos, gridUnit in pairs(boardState.grid) do
+		if typeof(gridPos) == "Vector2" and gridPos.X == position.X and gridPos.Y == position.Y then
+			boardState.grid[gridPos] = nil
+			gridUnit.position = nil
+			if boardState.currentUnits then
+				boardState.currentUnits = math.max(0, boardState.currentUnits - 1)
+			end
+			return gridUnit
+		end
+	end
+	
 	return nil
 end
 
@@ -97,7 +124,7 @@ function Board.moveUnit(boardState: BoardState, fromPosition: Vector2, toPositio
 	end
 	
 	-- Check if source position has a unit
-	local unit = boardState.grid[fromPosition]
+	local unit = Board.getUnitAtPosition(boardState, fromPosition)
 	if not unit then
 		return false
 	end
@@ -108,11 +135,15 @@ function Board.moveUnit(boardState: BoardState, fromPosition: Vector2, toPositio
 	end
 	
 	-- Move unit
-	boardState.grid[fromPosition] = nil
-	boardState.grid[toPosition] = unit
-	unit.position = toPosition
+	local removedUnit = Board.removeUnit(boardState, fromPosition)
+	if removedUnit then
+		boardState.grid[toPosition] = unit
+		unit.position = toPosition
+		boardState.currentUnits = boardState.currentUnits + 1  -- Add back since removeUnit decremented it
+		return true
+	end
 	
-	return true
+	return false
 end
 
 -- Function to swap units on the board
@@ -123,8 +154,8 @@ function Board.swapUnits(boardState: BoardState, position1: Vector2, position2: 
 	end
 	
 	-- Get units from both positions
-	local unit1 = boardState.grid[position1]
-	local unit2 = boardState.grid[position2]
+	local unit1 = Board.getUnitAtPosition(boardState, position1)
+	local unit2 = Board.getUnitAtPosition(boardState, position2)
 	
 	-- Check if both positions have units
 	if not unit1 or not unit2 then
@@ -132,17 +163,37 @@ function Board.swapUnits(boardState: BoardState, position1: Vector2, position2: 
 	end
 	
 	-- Swap units
-	boardState.grid[position1] = unit2
-	boardState.grid[position2] = unit1
-	unit1.position = position2
-	unit2.position = position1
+	local removedUnit1 = Board.removeUnit(boardState, position1)
+	local removedUnit2 = Board.removeUnit(boardState, position2)
 	
-	return true
+	if removedUnit1 and removedUnit2 then
+		boardState.grid[position1] = unit2
+		boardState.grid[position2] = unit1
+		unit1.position = position2
+		unit2.position = position1
+		boardState.currentUnits = boardState.currentUnits + 2  -- Add back since removeUnit decremented it twice
+		return true
+	end
+	
+	return false
 end
 
 -- Function to get unit at position
 function Board.getUnitAtPosition(boardState: BoardState, position: Vector2): Unit?
-	return boardState.grid[position]
+	-- Try direct access first
+	local unit = boardState.grid[position]
+	if unit then
+		return unit
+	end
+	
+	-- If direct access fails, search by value
+	for gridPos, gridUnit in pairs(boardState.grid) do
+		if typeof(gridPos) == "Vector2" and gridPos.X == position.X and gridPos.Y == position.Y then
+			return gridUnit
+		end
+	end
+	
+	return nil
 end
 
 -- Function to get all units on board

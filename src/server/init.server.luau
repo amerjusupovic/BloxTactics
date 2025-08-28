@@ -97,15 +97,15 @@ end)
 	-- Refresh shop handler
 	refreshShopEvent.OnServerEvent:Connect(function(player)
 		local userId = player.UserId
-		local playerData = PlayerDataManager.getPlayerData(userId)
-
-		if not playerData then
-			return
+		
+		-- Handle shop refresh through ShopManager
+		local success = ShopManager.refreshShop(userId)
+		
+		if success then
+			print("Player " .. player.Name .. " successfully refreshed shop")
+		else
+			print("Player " .. player.Name .. " failed to refresh shop")
 		end
-
-		-- Handle shop refresh logic here
-		-- This will be implemented in Phase 2
-		print("Player " .. player.Name .. " attempted to refresh shop")
 	end)
 
 	-- Update player data handler (for client requests)
