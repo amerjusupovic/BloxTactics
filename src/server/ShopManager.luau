@@ -69,6 +69,12 @@ function ShopManager.handleUnitPurchase(userId: number, shopIndex: number)
 	local unit = shopData.units[shopIndex]
 	if not unit then return false end
 	
+	-- Check if unit is already sold out
+	if unit.soldOut then
+		ShopManager.sendNotification(userId, "This unit is already sold out!", 3)
+		return false
+	end
+	
 	-- Check if player has enough gold
 	if playerData.gold < unit.cost then
 		-- Send insufficient funds message
@@ -93,14 +99,8 @@ function ShopManager.handleUnitPurchase(userId: number, shopIndex: number)
 			-- Spawn physical unit on board
 			UnitSpawner.spawnUnitOnBoard(userId, unit, availablePosition)
 			
-			-- Remove from shop
-			table.remove(shopData.units, shopIndex)
-			
-			-- Add new unit to shop
-			local newUnit = Shop.generateRandomUnit(playerData.level)
-			if newUnit then
-				table.insert(shopData.units, newUnit)
-			end
+			-- Mark unit as sold out instead of removing it
+			unit.soldOut = true
 			
 			-- Save player data
 			PlayerDataManager.savePlayerData(userId)
@@ -126,14 +126,8 @@ function ShopManager.handleUnitPurchase(userId: number, shopIndex: number)
 				UnitSpawner.spawnUnitOnBench(userId, unit, benchSlot)
 			end
 			
-			-- Remove from shop
-			table.remove(shopData.units, shopIndex)
-			
-			-- Add new unit to shop
-			local newUnit = Shop.generateRandomUnit(playerData.level)
-			if newUnit then
-				table.insert(shopData.units, newUnit)
-			end
+			-- Mark unit as sold out instead of removing it
+			unit.soldOut = true
 			
 			-- Save player data
 			PlayerDataManager.savePlayerData(userId)
@@ -666,6 +660,55 @@ function ShopManager.handleBenchUnitSell(userId: number, unitId: string, positio
 		ShopManager.sendNotification(userId, "Failed to sell unit!", 3)
 		return false
 	end
+end
+
+-- Function to handle level up (buy experience)
+function ShopManager.handleLevelUp(userId: number): boolean
+	local playerData = PlayerDataManager.getPlayerData(userId)
+	if not playerData then return false end
+	
+	-- Check if player is already at max level
+	if playerData.level >= Constants.MAX_LEVEL then
+		ShopManager.sendNotification(userId, "Already at maximum level!", 3)
+		return false
+	end
+	
+	-- Check if player has enough gold
+	if playerData.gold < Constants.LEVEL_UP_COST then
+		ShopManager.sendNotification(userId, "Insufficient gold! Need " .. Constants.LEVEL_UP_COST .. " gold.", 3)
+		return false
+	end
+	
+	-- Deduct gold
+	PlayerDataManager.spendGold(userId, Constants.LEVEL_UP_COST)
+	
+	-- Add experience
+	PlayerDataManager.addExperience(userId, Constants.LEVEL_UP_EXPERIENCE)
+	
+	-- Check if player leveled up
+	local newPlayerData = PlayerDataManager.getPlayerData(userId)
+	local levelGained = newPlayerData.level - playerData.level
+	
+	-- Generate new shop with updated level
+	local shopUnits = Shop.generateShop(newPlayerData.level)
+	playerShops[userId] = {
+		units = shopUnits,
+		lastRefresh = os.time()
+	}
+	
+	-- Save player data
+	PlayerDataManager.savePlayerData(userId)
+	
+	-- Update client
+	ShopManager.sendShopToClient(userId)
+	ShopManager.sendNotification(userId, "Gained " .. Constants.LEVEL_UP_EXPERIENCE .. " experience! Cost: " .. Constants.LEVEL_UP_COST .. " gold", 2)
+	
+	-- If player leveled up, show special notification
+	if levelGained > 0 then
+		ShopManager.sendNotification(userId, "Level up! You are now level " .. newPlayerData.level .. "!", 3)
+	end
+	
+	return true
 end
 
 -- Function to cleanup player data

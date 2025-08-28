@@ -10,6 +10,8 @@ Constants.STARTING_GOLD = 100
 Constants.STARTING_LEVEL = 1
 Constants.MAX_LEVEL = 10
 Constants.EXPERIENCE_PER_LEVEL = 100
+Constants.LEVEL_UP_COST = 10
+Constants.LEVEL_UP_EXPERIENCE = 20
 
 -- Board constants
 Constants.BOARD_WIDTH = 7
@@ -51,6 +53,7 @@ Constants.REMOTE_EVENT_NAMES = {
 	MOVE_UNIT = "MoveUnit",
 	SELL_UNIT = "SellUnit",
 	REFRESH_SHOP = "RefreshShop",
+	LEVEL_UP = "LevelUp",
 	CHALLENGE_PLAYER = "ChallengePlayer",
 	ACCEPT_CHALLENGE = "AcceptChallenge",
 	REJECT_CHALLENGE = "RejectChallenge",

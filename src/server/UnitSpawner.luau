@@ -76,9 +76,11 @@ function UnitSpawner.spawnUnitOnBoard(userId: number, unit: any, position: Vecto
 	-- Adjust Y position to be on top of the hex
 	local hexCFrame = hex.CFrame
 	
-	-- Calculate unit height and raise by half the unit's height
+	-- Calculate unit height and position so feet touch the hex surface
 	local unitSize = spawnedUnit:GetExtentsSize()
 	local unitHeight = unitSize.Y
+	-- Position the unit so its bottom (feet) touches the hex surface
+	-- The model's center should be positioned at half the unit height above the hex
 	local heightOffset = unitHeight / 2
 	
 	local adjustedCFrame = CFrame.new(hexCFrame.Position + Vector3.new(0, heightOffset, 0))
@@ -137,9 +139,11 @@ function UnitSpawner.spawnUnitOnBench(userId: number, unit: any, benchSlot: numb
 	-- Adjust Y position to be on top of the bench
 	local benchCFrame = bench.CFrame
 	
-	-- Calculate unit height and raise by half the unit's height
+	-- Calculate unit height and position so feet touch the bench surface
 	local unitSize = spawnedUnit:GetExtentsSize()
 	local unitHeight = unitSize.Y
+	-- Position the unit so its bottom (feet) touches the bench surface
+	-- The model's center should be positioned at half the unit height above the bench
 	local heightOffset = unitHeight / 2
 	
 	local adjustedCFrame = CFrame.new(benchCFrame.Position + Vector3.new(0, heightOffset, 0))

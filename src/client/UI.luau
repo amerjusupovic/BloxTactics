@@ -111,6 +111,14 @@ function UI.createMainUI()
 		end)
 	end
 	
+	-- Add click handler for level up button
+	local levelUpButton = shopFrame:FindFirstChild("LevelUpButton")
+	if levelUpButton then
+		levelUpButton.MouseButton1Click:Connect(function()
+			UI.handleLevelUp()
+		end)
+	end
+	
 	print("UI created successfully from template!")
 end
 
@@ -179,8 +187,20 @@ function UI.createShopUnitButton(unit: DataStructures.Unit, parent: GuiObject, o
 	infoLabel.Font = Enum.Font.Gotham
 	infoLabel.Parent = button
 	
-	-- Add click handler
-	button.MouseButton1Click:Connect(onClick)
+	-- Check if unit is sold out
+	if unit.soldOut then
+		-- Gray out the button and make it unclickable
+		button.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+		button.ImageTransparency = 0.7
+		button:SetAttribute("SoldOut", true)
+		
+		-- Update info label to show "SOLD OUT"
+		infoLabel.Text = unit.name .. "\nSOLD OUT\nTier: " .. unit.tier
+		infoLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+	else
+		-- Add click handler only if not sold out
+		button.MouseButton1Click:Connect(onClick)
+	end
 	
 	-- Store unit data in button (only primitive types)
 	button:SetAttribute("UnitId", unit.id)
@@ -188,6 +208,7 @@ function UI.createShopUnitButton(unit: DataStructures.Unit, parent: GuiObject, o
 	button:SetAttribute("UnitCost", unit.cost)
 	button:SetAttribute("UnitTier", unit.tier)
 	button:SetAttribute("UnitImageAssetId", unit.imageAssetId)
+	button:SetAttribute("SoldOut", unit.soldOut or false)
 	
 	return button
 end
@@ -234,6 +255,17 @@ function UI.handleShopRefresh()
 		refreshShopEvent:FireServer()
 	else
 		warn("RefreshShop RemoteEvent not found!")
+	end
+end
+
+-- Function to handle level up (buy experience)
+function UI.handleLevelUp()
+	-- Fire RemoteEvent to server
+	local levelUpEvent = game.ReplicatedStorage.RemoteEvents:WaitForChild("LevelUp")
+	if levelUpEvent then
+		levelUpEvent:FireServer()
+	else
+		warn("LevelUp RemoteEvent not found!")
 	end
 end
 

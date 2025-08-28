@@ -26,6 +26,7 @@ local function setupRemoteEventHandlers()
 	local moveUnitEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.MOVE_UNIT)
 	local sellUnitEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SELL_UNIT)
 	local refreshShopEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.REFRESH_SHOP)
+	local levelUpEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.LEVEL_UP)
 	local updatePlayerDataEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.UPDATE_PLAYER_DATA)
 
 	-- Purchase unit handler
@@ -37,6 +38,12 @@ purchaseUnitEvent.OnServerEvent:Connect(function(player, unitIndex)
 	
 	if success then
 		print("Player " .. player.Name .. " successfully purchased unit at index " .. unitIndex)
+		
+		-- Send updated player data to client to update gold display
+		local playerData = PlayerDataManager.getPlayerData(userId)
+		if playerData then
+			updatePlayerDataEvent:FireClient(player, playerData)
+		end
 	else
 		print("Player " .. player.Name .. " failed to purchase unit at index " .. unitIndex)
 	end
@@ -103,8 +110,34 @@ end)
 		
 		if success then
 			print("Player " .. player.Name .. " successfully refreshed shop")
+			
+			-- Send updated player data to client to update gold display
+			local playerData = PlayerDataManager.getPlayerData(userId)
+			if playerData then
+				updatePlayerDataEvent:FireClient(player, playerData)
+			end
 		else
 			print("Player " .. player.Name .. " failed to refresh shop")
+		end
+	end)
+
+	-- Level up handler
+	levelUpEvent.OnServerEvent:Connect(function(player)
+		local userId = player.UserId
+		
+		-- Handle level up through ShopManager
+		local success = ShopManager.handleLevelUp(userId)
+		
+		if success then
+			print("Player " .. player.Name .. " successfully leveled up")
+			
+			-- Send updated player data to client to update UI
+			local playerData = PlayerDataManager.getPlayerData(userId)
+			if playerData then
+				updatePlayerDataEvent:FireClient(player, playerData)
+			end
+		else
+			print("Player " .. player.Name .. " failed to level up")
 		end
 	end)
 
