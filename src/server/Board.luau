@@ -115,6 +115,31 @@ function Board.moveUnit(boardState: BoardState, fromPosition: Vector2, toPositio
 	return true
 end
 
+-- Function to swap units on the board
+function Board.swapUnits(boardState: BoardState, position1: Vector2, position2: Vector2): boolean
+	-- Validate positions
+	if not Board.isValidPosition(position1) or not Board.isValidPosition(position2) then
+		return false
+	end
+	
+	-- Get units from both positions
+	local unit1 = boardState.grid[position1]
+	local unit2 = boardState.grid[position2]
+	
+	-- Check if both positions have units
+	if not unit1 or not unit2 then
+		return false
+	end
+	
+	-- Swap units
+	boardState.grid[position1] = unit2
+	boardState.grid[position2] = unit1
+	unit1.position = position2
+	unit2.position = position1
+	
+	return true
+end
+
 -- Function to get unit at position
 function Board.getUnitAtPosition(boardState: BoardState, position: Vector2): Unit?
 	return boardState.grid[position]

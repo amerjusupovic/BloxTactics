@@ -591,7 +591,7 @@ function UI.handleHexClick(hex: GuiObject, position: Vector2)
 	
 	-- If we have a selected unit and clicked on a different hex
 	if selectedUnit and selectedHex and selectedHex ~= hex then
-		-- Move the unit
+		-- Move the unit (this handles swapping too)
 		UI.moveUnit(selectedUnit, selectedHex, hex, position)
 		UI.clearSelection()
 		return
@@ -603,8 +603,11 @@ function UI.handleHexClick(hex: GuiObject, position: Vector2)
 		return
 	end
 	
-	-- If we clicked on a hex with a unit, select it (but unit click will handle this)
-	-- This is mainly for movement logic
+	-- If we clicked on a hex with a unit, select it
+	-- This allows for unit swapping when clicking on different units
+	if unitVisual then
+		UI.selectUnit(unitVisual, hex)
+	end
 end
 
 -- Function to move a unit
@@ -857,6 +860,13 @@ function UI.createBoardHexes()
 		
 		hex.Position = UDim2.new(posX, 0, posY, 0)
 		hex.Parent = benchFrame
+		
+		-- Add click handler for bench hex selection/movement
+		-- Use negative bench slot as position (e.g., -1 for slot 1)
+		local benchPosition = Vector2.new(-col, 0)
+		hex.MouseButton1Click:Connect(function()
+			UI.handleHexClick(hex, benchPosition)
+		end)
 	end
 	
 	print("Board and bench hexes created successfully!")

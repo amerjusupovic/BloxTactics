@@ -138,6 +138,96 @@ function Bench.removeUnitFromSlot(benchState: BenchState, slot: number): boolean
 	return false
 end
 
+-- Function to place a unit in a specific bench slot
+function Bench.placeUnitInSlot(benchState: BenchState, unit: Unit, slot: number, existingUnitId: string?): boolean
+	-- Check if slot is valid
+	if slot < 1 or slot > benchState.maxCapacity then
+		return false
+	end
+	
+	-- Use existing unit ID if provided, otherwise generate new one
+	local unitId = existingUnitId or (unit.id .. "_" .. os.time() .. "_" .. math.random(1000, 9999))
+	
+	-- Add unit to bench
+	benchState.units[unitId] = unit
+	benchState.currentCapacity = benchState.currentCapacity + 1
+	
+	return true
+end
+
+-- Function to move a unit from one slot to another
+function Bench.moveUnitToSlot(benchState: BenchState, fromSlot: number, toSlot: number): boolean
+	-- Check if slots are valid
+	if fromSlot < 1 or fromSlot > benchState.maxCapacity or toSlot < 1 or toSlot > benchState.maxCapacity then
+		return false
+	end
+	
+	-- Get unit from source slot
+	local unit = Bench.getUnitAtSlot(benchState, fromSlot)
+	if not unit then
+		return false
+	end
+	
+	-- Find the unit ID before removing it
+	local unitId = nil
+	local slotIndex = 1
+	for id, _ in pairs(benchState.units) do
+		if slotIndex == fromSlot then
+			unitId = id
+			break
+		end
+		slotIndex = slotIndex + 1
+	end
+	
+	-- Remove from source slot
+	local removeSuccess = Bench.removeUnitFromSlot(benchState, fromSlot)
+	if not removeSuccess then
+		return false
+	end
+	
+	-- Add to destination slot with the same unit ID
+	return Bench.placeUnitInSlot(benchState, unit, toSlot, unitId)
+end
+
+-- Function to swap units between two bench slots
+function Bench.swapUnits(benchState: BenchState, slot1: number, slot2: number): boolean
+	-- Check if slots are valid
+	if slot1 < 1 or slot1 > benchState.maxCapacity or slot2 < 1 or slot2 > benchState.maxCapacity then
+		return false
+	end
+	
+	-- Get units from both slots
+	local unit1 = Bench.getUnitAtSlot(benchState, slot1)
+	local unit2 = Bench.getUnitAtSlot(benchState, slot2)
+	
+	-- Find unit IDs before removing them
+	local unit1Id = nil
+	local unit2Id = nil
+	local slotIndex = 1
+	for id, _ in pairs(benchState.units) do
+		if slotIndex == slot1 then
+			unit1Id = id
+		elseif slotIndex == slot2 then
+			unit2Id = id
+		end
+		slotIndex = slotIndex + 1
+	end
+	
+	-- Remove units from both slots
+	local remove1Success = Bench.removeUnitFromSlot(benchState, slot1)
+	local remove2Success = Bench.removeUnitFromSlot(benchState, slot2)
+	
+	if not remove1Success or not remove2Success then
+		return false
+	end
+	
+	-- Place units in opposite slots with preserved IDs
+	local place1Success = Bench.placeUnitInSlot(benchState, unit1, slot2, unit1Id)
+	local place2Success = Bench.placeUnitInSlot(benchState, unit2, slot1, unit2Id)
+	
+	return place1Success and place2Success
+end
+
 -- Function to validate bench state
 function Bench.validateBenchState(benchState: BenchState): boolean
 	-- Check if current capacity matches actual units

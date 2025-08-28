@@ -228,10 +228,29 @@ function ShopManager.handleUnitMove(userId: number, fromPosition: Vector2, toPos
 	local playerData = PlayerDataManager.getPlayerData(userId)
 	if not playerData then return false end
 	
-	-- Check if this is a bench-to-board move (fromPosition.X < 0 indicates bench)
-	if fromPosition.X < 0 then
+	-- Determine movement type based on positions
+	local fromBench = fromPosition.X < 0
+	local toBench = toPosition.X < 0
+	
+	print("Movement type detection:")
+	print("  fromPosition:", fromPosition, "fromBench:", fromBench)
+	print("  toPosition:", toPosition, "toBench:", toBench)
+	
+	if fromBench and toBench then
+		-- Bench to Bench movement
+		print("  Detected: Bench to Bench movement")
+		return ShopManager.handleBenchToBenchMove(userId, fromPosition, toPosition)
+	elseif fromBench and not toBench then
+		-- Bench to Board movement
+		print("  Detected: Bench to Board movement")
 		return ShopManager.handleBenchToBoardMove(userId, fromPosition, toPosition)
+	elseif not fromBench and toBench then
+		-- Board to Bench movement
+		print("  Detected: Board to Bench movement")
+		return ShopManager.handleBoardToBenchMove(userId, fromPosition, toPosition)
 	else
+		-- Board to Board movement
+		print("  Detected: Board to Board movement")
 		return ShopManager.handleBoardToBoardMove(userId, fromPosition, toPosition)
 	end
 end
@@ -249,6 +268,9 @@ function ShopManager.handleBoardToBoardMove(userId: number, fromPosition: Vector
 	
 	-- Check if source position has a unit
 	local sourceUnit = Board.getUnitAtPosition(playerData.boardState, fromPosition)
+	print("Board-to-board movement:")
+	print("  fromPosition:", fromPosition)
+	print("  sourceUnit:", sourceUnit and sourceUnit.name or "nil")
 	if not sourceUnit then
 		ShopManager.sendNotification(userId, "No unit at source position!", 3)
 		return false
@@ -257,34 +279,184 @@ function ShopManager.handleBoardToBoardMove(userId: number, fromPosition: Vector
 	-- Check if destination is occupied
 	local targetUnit = Board.getUnitAtPosition(playerData.boardState, toPosition)
 	
-	-- Move the unit
-	local success = Board.moveUnit(playerData.boardState, fromPosition, toPosition)
-	if success then
-		-- Update physical units
-		if targetUnit then
-			-- Swap units
+	if targetUnit then
+		-- Swap units
+		local success = Board.swapUnits(playerData.boardState, fromPosition, toPosition)
+		if success then
+			-- Update physical units
 			UnitSpawner.removeUnitFromBoard(userId, fromPosition)
 			UnitSpawner.removeUnitFromBoard(userId, toPosition)
 			UnitSpawner.spawnUnitOnBoard(userId, sourceUnit, toPosition)
 			UnitSpawner.spawnUnitOnBoard(userId, targetUnit, fromPosition)
 		else
-			-- Simple move
+			ShopManager.sendNotification(userId, "Failed to swap units!", 3)
+			return false
+		end
+	else
+		-- Simple move
+		local success = Board.moveUnit(playerData.boardState, fromPosition, toPosition)
+		if success then
+			-- Update physical units
 			UnitSpawner.removeUnitFromBoard(userId, fromPosition)
 			UnitSpawner.spawnUnitOnBoard(userId, sourceUnit, toPosition)
+		else
+			ShopManager.sendNotification(userId, "Failed to move unit!", 3)
+			return false
 		end
+	end
 		
-		-- Save player data
-		PlayerDataManager.savePlayerData(userId)
-		
-		-- Update client
-		ShopManager.sendBoardUpdate(userId)
-		ShopManager.sendNotification(userId, "Unit moved successfully!", 2)
-		
-		return true
-	else
-		ShopManager.sendNotification(userId, "Failed to move unit!", 3)
+	-- Save player data
+	PlayerDataManager.savePlayerData(userId)
+	
+	-- Update client
+	ShopManager.sendBoardUpdate(userId)
+	ShopManager.sendNotification(userId, "Unit moved successfully!", 2)
+	
+	return true
+end
+
+-- Function to handle bench-to-bench movement
+function ShopManager.handleBenchToBenchMove(userId: number, fromPosition: Vector2, toPosition: Vector2): boolean
+	local playerData = PlayerDataManager.getPlayerData(userId)
+	if not playerData then return false end
+	
+	-- Extract bench slots
+	local fromSlot = math.abs(fromPosition.X)
+	local toSlot = math.abs(toPosition.X)
+	
+	print("Bench-to-bench movement:")
+	print("  fromPosition:", fromPosition, "fromSlot:", fromSlot)
+	print("  toPosition:", toPosition, "toSlot:", toSlot)
+	
+	-- Check if source slot has a unit
+	local sourceUnit = Bench.getUnitAtSlot(playerData.benchState, fromSlot)
+	if not sourceUnit then
+		ShopManager.sendNotification(userId, "No unit at source bench slot!", 3)
 		return false
 	end
+	
+	-- Check if destination slot is occupied
+	local targetUnit = Bench.getUnitAtSlot(playerData.benchState, toSlot)
+	
+	if targetUnit then
+		-- Swap units between bench slots
+		local success = Bench.swapUnits(playerData.benchState, fromSlot, toSlot)
+		if success then
+			-- Update physical units
+			UnitSpawner.removeUnitFromBench(userId, fromSlot)
+			UnitSpawner.removeUnitFromBench(userId, toSlot)
+			UnitSpawner.spawnUnitOnBench(userId, sourceUnit, toSlot)
+			UnitSpawner.spawnUnitOnBench(userId, targetUnit, fromSlot)
+			
+			-- Save player data
+			PlayerDataManager.savePlayerData(userId)
+			
+			-- Update client
+			ShopManager.sendBenchUpdate(userId)
+			ShopManager.sendNotification(userId, "Units swapped on bench!", 2)
+			
+			return true
+		end
+	else
+		-- Move unit to empty bench slot
+		local success = Bench.moveUnitToSlot(playerData.benchState, fromSlot, toSlot)
+		if success then
+			-- Update physical units
+			UnitSpawner.removeUnitFromBench(userId, fromSlot)
+			UnitSpawner.spawnUnitOnBench(userId, sourceUnit, toSlot)
+			
+			-- Save player data
+			PlayerDataManager.savePlayerData(userId)
+			
+			-- Update client
+			ShopManager.sendBenchUpdate(userId)
+			ShopManager.sendNotification(userId, "Unit moved on bench!", 2)
+			
+			return true
+		end
+	end
+	
+	ShopManager.sendNotification(userId, "Failed to move unit on bench!", 3)
+	return false
+end
+
+-- Function to handle board-to-bench movement
+function ShopManager.handleBoardToBenchMove(userId: number, fromPosition: Vector2, toPosition: Vector2): boolean
+	local playerData = PlayerDataManager.getPlayerData(userId)
+	if not playerData then return false end
+	
+	-- Validate board position
+	if not Board.isValidPosition(fromPosition) then
+		ShopManager.sendNotification(userId, "Invalid board position!", 3)
+		return false
+	end
+	
+	-- Extract bench slot
+	local benchSlot = math.abs(toPosition.X)
+	
+	-- Check if board position has a unit
+	local boardUnit = Board.getUnitAtPosition(playerData.boardState, fromPosition)
+	if not boardUnit then
+		ShopManager.sendNotification(userId, "No unit at board position!", 3)
+		return false
+	end
+	
+	-- Check if bench slot is occupied
+	local benchUnit = Bench.getUnitAtSlot(playerData.benchState, benchSlot)
+	
+	if benchUnit then
+		-- Swap: board unit to bench, bench unit to board
+		local boardSuccess = Board.removeUnit(playerData.boardState, fromPosition)
+		local benchSuccess = Bench.removeUnitFromSlot(playerData.benchState, benchSlot)
+		
+		if boardSuccess and benchSuccess then
+			-- Add units to their new positions
+			Board.placeUnit(playerData.boardState, benchUnit, fromPosition)
+			Bench.placeUnitInSlot(playerData.benchState, boardUnit, benchSlot)
+			
+			-- Update physical units
+			UnitSpawner.removeUnitFromBoard(userId, fromPosition)
+			UnitSpawner.removeUnitFromBench(userId, benchSlot)
+			UnitSpawner.spawnUnitOnBoard(userId, benchUnit, fromPosition)
+			UnitSpawner.spawnUnitOnBench(userId, boardUnit, benchSlot)
+			
+			-- Save player data
+			PlayerDataManager.savePlayerData(userId)
+			
+			-- Update client (send bench update first, then board update)
+			ShopManager.sendBenchUpdate(userId)
+			wait(0.1) -- Small delay to ensure bench update is processed first
+			ShopManager.sendBoardUpdate(userId)
+			ShopManager.sendNotification(userId, "Units swapped between board and bench!", 2)
+			
+			return true
+		end
+	else
+		-- Move board unit to empty bench slot
+		local boardSuccess = Board.removeUnit(playerData.boardState, fromPosition)
+		if boardSuccess then
+			local benchSuccess = Bench.addUnit(playerData.benchState, boardUnit)
+			if benchSuccess then
+				-- Update physical units
+				UnitSpawner.removeUnitFromBoard(userId, fromPosition)
+				UnitSpawner.spawnUnitOnBench(userId, boardUnit, benchSlot)
+				
+				-- Save player data
+				PlayerDataManager.savePlayerData(userId)
+				
+				-- Update client (send bench update first, then board update)
+				ShopManager.sendBenchUpdate(userId)
+				wait(0.1) -- Small delay to ensure bench update is processed first
+				ShopManager.sendBoardUpdate(userId)
+				ShopManager.sendNotification(userId, "Unit moved from board to bench!", 2)
+				
+				return true
+			end
+		end
+	end
+	
+	ShopManager.sendNotification(userId, "Failed to move unit from board to bench!", 3)
+	return false
 end
 
 -- Function to handle bench-to-board movement
