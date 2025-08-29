@@ -1,141 +1,224 @@
 --[[
 	UnitTiering.luau
-	Unit tiering and combination system
+	Unit tiering and combination logic
 ]]
 
 local DataStructures = require(script.Parent.DataStructures)
-local Constants = require(script.Parent.Constants)
 local Unit = DataStructures.Unit
+local BoardState = DataStructures.BoardState
+local BenchState = DataStructures.BenchState
 
 local UnitTiering = {}
 
--- Function to check if units can be combined
-function UnitTiering.canCombineUnits(units: {Unit}): boolean
-	if #units < Constants.UNITS_FOR_TIER_UP then
+-- Maximum tier for units
+local MAX_TIER = 3
+
+-- Function to count units of a specific type and tier
+function UnitTiering.countUnitsByTypeAndTier(boardState: BoardState, benchState: BenchState, unitId: string, tier: number): number
+	local count = 0
+	
+	-- Count units on board
+	if boardState and boardState.grid then
+		for _, unit in pairs(boardState.grid) do
+			if unit and unit.id == unitId and unit.tier == tier then
+				count = count + 1
+			end
+		end
+	end
+	
+	-- Count units on bench
+	if benchState and benchState.units then
+		for _, unit in pairs(benchState.units) do
+			if unit and unit.id == unitId and unit.tier == tier then
+				count = count + 1
+			end
+		end
+	end
+	
+	return count
+end
+
+-- Function to get all units of a specific type
+function UnitTiering.getUnitsByType(boardState: BoardState, benchState: BenchState, unitId: string): {Unit}
+	local units = {}
+	
+	-- Get units from board
+	if boardState and boardState.grid then
+		for _, unit in pairs(boardState.grid) do
+			if unit and unit.id == unitId then
+				table.insert(units, unit)
+			end
+		end
+	end
+	
+	-- Get units from bench
+	if benchState and benchState.units then
+		for _, unit in pairs(benchState.units) do
+			if unit and unit.id == unitId then
+				table.insert(units, unit)
+			end
+		end
+	end
+	
+	return units
+end
+
+-- Function to check if a unit can be combined to create a higher tier
+function UnitTiering.canCombineToTier(boardState: BoardState, benchState: BenchState, unitId: string, targetTier: number): boolean
+	if targetTier <= 1 or targetTier > MAX_TIER then
 		return false
 	end
 	
-	-- Check if all units are the same type and tier
-	local firstUnit = units[1]
-	for _, unit in ipairs(units) do
-		if unit.id ~= firstUnit.id or unit.tier ~= firstUnit.tier then
-			return false
-		end
+	-- Calculate how many tier 1 units are needed for the target tier
+	local unitsNeeded = 3 ^ (targetTier - 1) -- 3 for tier 2, 9 for tier 3
+	
+	-- Count available tier 1 units
+	local tier1Count = UnitTiering.countUnitsByTypeAndTier(boardState, benchState, unitId, 1)
+	
+	-- If we need tier 2, also count tier 2 units (each tier 2 = 3 tier 1)
+	if targetTier == 2 then
+		local tier2Count = UnitTiering.countUnitsByTypeAndTier(boardState, benchState, unitId, 2)
+		tier1Count = tier1Count + (tier2Count * 3)
+	elseif targetTier == 3 then
+		local tier2Count = UnitTiering.countUnitsByTypeAndTier(boardState, benchState, unitId, 2)
+		local tier3Count = UnitTiering.countUnitsByTypeAndTier(boardState, benchState, unitId, 3)
+		tier1Count = tier1Count + (tier2Count * 3) + (tier3Count * 9)
 	end
 	
-	return true
+	return tier1Count >= unitsNeeded
 end
 
--- Function to combine units into a higher tier
-function UnitTiering.combineUnits(units: {Unit}): Unit?
-	if not UnitTiering.canCombineUnits(units) then
-		return nil
-	end
+-- Function to calculate the tier that would be created if a unit is purchased
+function UnitTiering.calculateTierUpResult(boardState: BoardState, benchState: BenchState, unitId: string): number?
+	-- Count existing units by tier
+	local tier1Count = UnitTiering.countUnitsByTypeAndTier(boardState, benchState, unitId, 1)
+	local tier2Count = UnitTiering.countUnitsByTypeAndTier(boardState, benchState, unitId, 2)
+	local tier3Count = UnitTiering.countUnitsByTypeAndTier(boardState, benchState, unitId, 3)
 	
-	local firstUnit = units[1]
-	local newTier = firstUnit.tier + 1
+	-- Add the unit being purchased (assumed to be tier 1)
+	tier1Count = tier1Count + 1
 	
-	-- Create the new higher tier unit
-	local combinedUnit = {
-		id = firstUnit.id,
-		name = firstUnit.name,
-		cost = firstUnit.cost,
-		tier = newTier,
-		stats = firstUnit.stats, -- Will be recalculated based on tier
-		abilities = firstUnit.abilities,
-		position = nil,
-		items = {} -- Combine items from all units
-	}
-	
-	-- Combine items from all units
-	for _, unit in ipairs(units) do
-		for itemId, item in pairs(unit.items) do
-			combinedUnit.items[itemId] = item
+	-- Check if we can create tier 3 first (need exactly 9 tier 1 units OR 3 tier 2 units)
+	if tier3Count == 0 then
+		if tier1Count >= 9 then
+			return 3 -- Can create tier 3 from 9 tier 1 units
+		elseif tier2Count >= 3 then
+			return 3 -- Can create tier 3 from 3 tier 2 units
 		end
 	end
 	
-	return combinedUnit
+	-- Check if we can create tier 2 (need exactly 3 tier 1 units)
+	if tier1Count >= 3 then
+		return 2 -- Can create tier 2
+	end
+	
+	return nil -- No tier up possible
 end
 
--- Function to find combinable units in a collection
-function UnitTiering.findCombinableUnits(units: {Unit}): {[string]: {Unit}}
-	local unitGroups = {}
+-- Function to get the star indicator type for a shop unit
+function UnitTiering.getStarIndicator(boardState: BoardState, benchState: BenchState, unitId: string): "none" | "silver" | "gold"
+	local tierUpResult = UnitTiering.calculateTierUpResult(boardState, benchState, unitId)
 	
-	-- Group units by type and tier
-	for _, unit in ipairs(units) do
-		local key = unit.id .. "_" .. unit.tier
-		if not unitGroups[key] then
-			unitGroups[key] = {}
-		end
-		table.insert(unitGroups[key], unit)
+	if tierUpResult == 2 then
+		return "silver" -- 2 silver stars for tier 2
+	elseif tierUpResult == 3 then
+		return "gold" -- 3 gold stars for tier 3
+	else
+		return "none" -- No stars
 	end
-	
-	-- Find groups that can be combined
-	local combinableGroups = {}
-	for key, group in pairs(unitGroups) do
-		if #group >= Constants.UNITS_FOR_TIER_UP then
-			combinableGroups[key] = group
-		end
-	end
-	
-	return combinableGroups
 end
 
--- Function to auto-combine units in a collection
-function UnitTiering.autoCombineUnits(units: {Unit}): ({Unit}, {Unit})
-	local originalUnits = units
-	local newUnits = {}
-	local combinedUnits = {}
+-- Function to find units to combine for tier up
+function UnitTiering.findUnitsToCombine(boardState: BoardState, benchState: BenchState, unitId: string, targetTier: number): {Unit}
+	local unitsToCombine = {}
 	
-	-- Find combinable groups
-	local combinableGroups = UnitTiering.findCombinableUnits(units)
+	-- Get all units of this type
+	local allUnits = UnitTiering.getUnitsByType(boardState, benchState, unitId)
 	
-	-- Process each combinable group
-	for key, group in pairs(combinableGroups) do
-		local unitsToCombine = {}
-		local remainingUnits = {}
+	-- Sort by tier (prefer lower tiers first for combination)
+	table.sort(allUnits, function(a, b)
+		return a.tier < b.tier
+	end)
+	
+	-- For tier 2, we need 3 tier 1 units
+	if targetTier == 2 then
+		local tier1Count = 0
+		for _, unit in ipairs(allUnits) do
+			if unit.tier == 1 and tier1Count < 3 then
+				table.insert(unitsToCombine, unit)
+				tier1Count = tier1Count + 1
+			end
+		end
+	-- For tier 3, we need 3 tier 2 units OR 9 tier 1 units
+	elseif targetTier == 3 then
+		local tier1Count = 0
+		local tier2Count = 0
 		
-		-- Take the required number of units for combination
-		for i = 1, Constants.UNITS_FOR_TIER_UP do
-			table.insert(unitsToCombine, group[i])
+		-- Count available units
+		for _, unit in ipairs(allUnits) do
+			if unit.tier == 2 then
+				tier2Count = tier2Count + 1
+			end
 		end
 		
-		-- Add remaining units to the list
-		for i = Constants.UNITS_FOR_TIER_UP + 1, #group do
-			table.insert(remainingUnits, group[i])
-		end
-		
-		-- Combine the units
-		local combinedUnit = UnitTiering.combineUnits(unitsToCombine)
-		if combinedUnit then
-			table.insert(combinedUnits, combinedUnit)
-		end
-		
-		-- Add remaining units to new units list
-		for _, unit in ipairs(remainingUnits) do
-			table.insert(newUnits, unit)
+		if tier2Count >= 3 then
+			-- Use 3 tier 2 units
+			local used = 0
+			for _, unit in ipairs(allUnits) do
+				if unit.tier == 2 and used < 3 then
+					table.insert(unitsToCombine, unit)
+					used = used + 1
+				end
+			end
+		else
+			-- Use 9 tier 1 units
+			for _, unit in ipairs(allUnits) do
+				if unit.tier == 1 and tier1Count < 9 then
+					table.insert(unitsToCombine, unit)
+					tier1Count = tier1Count + 1
+				end
+			end
 		end
 	end
 	
-	-- Add units that weren't part of any combinable group
-	for _, unit in ipairs(originalUnits) do
-		local wasUsed = false
-		for _, group in pairs(combinableGroups) do
-			for _, groupUnit in ipairs(group) do
-				if groupUnit == unit then
-					wasUsed = true
+	return unitsToCombine
+end
+
+-- Function to remove units from board/bench for combination
+function UnitTiering.removeUnitsForCombination(boardState: BoardState, benchState: BenchState, unitsToRemove: {Unit}): {Vector2}
+	local removedPositions = {}
+	
+	for _, unitToRemove in ipairs(unitsToRemove) do
+		-- Search on board
+		if boardState and boardState.grid then
+			for position, unit in pairs(boardState.grid) do
+				if unit == unitToRemove then
+					boardState.grid[position] = nil
+					unit.position = nil
+					if boardState.currentUnits then
+						boardState.currentUnits = math.max(0, boardState.currentUnits - 1)
+					end
+					table.insert(removedPositions, position)
 					break
 				end
 			end
-			if wasUsed then break end
 		end
 		
-		if not wasUsed then
-			table.insert(newUnits, unit)
+		-- Search on bench
+		if benchState and benchState.units then
+			for unitId, unit in pairs(benchState.units) do
+				if unit == unitToRemove then
+					benchState.units[unitId] = nil
+					if benchState.currentCapacity then
+						benchState.currentCapacity = math.max(0, benchState.currentCapacity - 1)
+					end
+					break
+				end
+			end
 		end
 	end
 	
-	return newUnits, combinedUnits
+	return removedPositions
 end
 
 return UnitTiering

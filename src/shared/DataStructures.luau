@@ -30,7 +30,9 @@ export type Unit = {
 	abilities: {[string]: Ability},
 	position: Vector2?, -- position on board/bench
 	items: {[string]: Item},
-	imageAssetId: string
+	imageAssetId: string,
+	starIndicator: ("none" | "silver" | "gold")?, -- Star indicator for shop units
+	soldOut: boolean? -- Whether the unit is sold out in shop
 }
 
 -- Unit stats

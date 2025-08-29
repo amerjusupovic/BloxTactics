@@ -175,6 +175,24 @@ function UI.createShopUnitButton(unit: DataStructures.Unit, parent: GuiObject, o
 	button.Image = unit.imageAssetId -- Use unit's image asset ID
 	button.Parent = parent
 	
+	-- Create star indicators if applicable
+	if unit.starIndicator and unit.starIndicator ~= "none" then
+		local starCount = (unit.starIndicator == "silver") and 2 or 3
+		local starColor = (unit.starIndicator == "silver") and Color3.fromRGB(192, 192, 192) or Color3.fromRGB(255, 215, 0)
+		
+		for i = 1, starCount do
+			local star = Instance.new("TextLabel")
+			star.Size = UDim2.new(0.15, 0, 0.15, 0)
+			star.Position = UDim2.new(0.1 + (i-1) * 0.2, 0, 0.05, 0)
+			star.BackgroundTransparency = 1
+			star.Text = "★"
+			star.TextColor3 = starColor
+			star.TextScaled = true
+			star.Font = Enum.Font.GothamBold
+			star.Parent = button
+		end
+	end
+	
 	-- Create unit info label
 	local infoLabel = Instance.new("TextLabel")
 	infoLabel.Size = UDim2.new(1, 0, 0.3, 0)

@@ -39,10 +39,10 @@ BloxTactics is a Teamfight Tactics (TFT) inspired game for Roblox where players 
 ## Phase 2: Shop & Economy System
 
 ### Step 4: Shop System
-- [ ] Create shop interface with unit display
-- [ ] Implement level-based unit odds calculation
-- [ ] Add shop refresh functionality
-- [ ] Create unit purchase system with gold validation
+- [x] Create shop interface with unit display
+- [x] Implement level-based unit odds calculation
+- [x] Add shop refresh functionality
+- [x] Create unit purchase system with gold validation
 
 ### Step 5: Leveling System
 - [ ] Implement experience gain from battles

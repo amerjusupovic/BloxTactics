@@ -14,6 +14,8 @@ local UnitSpawner = require(script.Parent.UnitSpawner)
 local RemoteEvents = require(script.Parent.RemoteEvents)
 local Constants = require(game.ReplicatedStorage.Shared.Constants)
 local DataStructures = require(game.ReplicatedStorage.Shared.DataStructures)
+local UnitTiering = require(game.ReplicatedStorage.Shared.UnitTiering)
+local UnitDatabase = require(game.ReplicatedStorage.Shared.UnitDatabase)
 
 local ShopManager = {}
 
@@ -44,9 +46,15 @@ function ShopManager.sendShopToClient(userId: number)
 	local shopData = playerShops[userId]
 	if not shopData then return end
 	
+	local playerData = PlayerDataManager.getPlayerData(userId)
+	if not playerData then return end
+	
+	-- Update shop units with star indicators
+	local updatedShopUnits = Shop.updateShopWithStarIndicators(shopData.units, playerData.boardState, playerData.benchState)
+	
 	local updateShopEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.UPDATE_SHOP)
 	if updateShopEvent then
-		updateShopEvent:FireClient(player, shopData.units)
+		updateShopEvent:FireClient(player, updatedShopUnits)
 	end
 end
 
@@ -82,6 +90,30 @@ function ShopManager.handleUnitPurchase(userId: number, shopIndex: number)
 		return false
 	end
 	
+	-- Check for tier-up possibility
+	local tierUpResult = UnitTiering.calculateTierUpResult(playerData.boardState, playerData.benchState, unit.id)
+	
+	if tierUpResult then
+		-- Perform tier-up combination
+		local success = ShopManager.performTierUp(userId, unit, tierUpResult)
+		if success then
+			-- Mark unit as sold out
+			unit.soldOut = true
+			
+			-- Save player data
+			PlayerDataManager.savePlayerData(userId)
+			
+			-- Update client
+			ShopManager.sendShopToClient(userId)
+			ShopManager.sendBoardUpdate(userId)
+			ShopManager.sendBenchUpdate(userId)
+			ShopManager.sendNotification(userId, "Unit combined to tier " .. tierUpResult .. "!", 3)
+			
+			return true
+		end
+	end
+	
+	-- No tier-up possible, place normally
 	-- Check if bench has space
 	if Bench.isBenchFull(playerData.benchState) then
 		-- Try to place on board
@@ -709,6 +741,59 @@ function ShopManager.handleLevelUp(userId: number): boolean
 	end
 	
 	return true
+end
+
+-- Function to perform tier-up combination
+function ShopManager.performTierUp(userId: number, purchasedUnit: any, targetTier: number): boolean
+	local playerData = PlayerDataManager.getPlayerData(userId)
+	if not playerData then return false end
+	
+	-- Find units to combine
+	local unitsToCombine = UnitTiering.findUnitsToCombine(playerData.boardState, playerData.benchState, purchasedUnit.id, targetTier)
+	
+	-- Add the purchased unit to the combination
+	table.insert(unitsToCombine, purchasedUnit)
+	
+	-- Remove the units that will be combined
+	local removedPositions = UnitTiering.removeUnitsForCombination(playerData.boardState, playerData.benchState, unitsToCombine)
+	
+	-- Remove physical units
+	for _, position in ipairs(removedPositions) do
+		UnitSpawner.removeUnitFromBoard(userId, position)
+	end
+	
+	-- Also remove bench units that were combined
+	for _, unit in ipairs(unitsToCombine) do
+		if unit.slot then -- This is a bench unit
+			UnitSpawner.removeUnitFromBench(userId, unit.slot)
+		end
+	end
+	
+	-- Create the new higher tier unit
+	local newUnit = UnitDatabase.createUnit(purchasedUnit.id, targetTier)
+	if not newUnit then return false end
+	
+	-- Deduct gold for the purchased unit
+	PlayerDataManager.spendGold(userId, purchasedUnit.cost)
+	
+	-- Place the new unit on bench (prefer bench over board for tier-ups)
+	local success, uniqueUnitId = Bench.addUnit(playerData.benchState, newUnit)
+	if success then
+		local benchSlot = Bench.getUnitSlot(playerData.benchState, uniqueUnitId)
+		if benchSlot then
+			UnitSpawner.spawnUnitOnBench(userId, newUnit, benchSlot)
+		end
+		return true
+	else
+		-- Try to place on board if bench is full
+		local availablePosition = Board.getAvailablePositions(playerData.boardState)[1]
+		if availablePosition and Board.placeUnit(playerData.boardState, newUnit, availablePosition) then
+			UnitSpawner.spawnUnitOnBoard(userId, newUnit, availablePosition)
+			return true
+		end
+	end
+	
+	return false
 end
 
 -- Function to cleanup player data

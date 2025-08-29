@@ -6,6 +6,7 @@
 local DataStructures = require(game.ReplicatedStorage.Shared.DataStructures)
 local Constants = require(game.ReplicatedStorage.Shared.Constants)
 local UnitDatabase = require(game.ReplicatedStorage.Shared.UnitDatabase)
+local UnitTiering = require(game.ReplicatedStorage.Shared.UnitTiering)
 local ShopData = DataStructures.ShopData
 local Unit = DataStructures.Unit
 
@@ -123,6 +124,19 @@ end
 -- Function to validate unit purchase
 function Shop.validatePurchase(playerGold: number, unitCost: number): boolean
 	return playerGold >= unitCost
+end
+
+-- Function to update shop units with star indicators
+function Shop.updateShopWithStarIndicators(shopUnits: {Unit}, boardState: any, benchState: any): {Unit}
+	for _, unit in ipairs(shopUnits) do
+		if not unit.soldOut then
+			local starIndicator = UnitTiering.getStarIndicator(boardState, benchState, unit.id)
+			unit.starIndicator = starIndicator
+		else
+			unit.starIndicator = "none"
+		end
+	end
+	return shopUnits
 end
 
 return Shop

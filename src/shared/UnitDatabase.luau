@@ -135,6 +135,13 @@ function UnitDatabase.calculateUnitStats(baseStats: UnitStats, tier: number): Un
 	}
 end
 
+-- Function to calculate unit size scale based on tier
+function UnitDatabase.calculateUnitSizeScale(tier: number): number
+	local multiplier = TIER_MULTIPLIERS[tier] or 1.0
+	-- Cap the size multiplier to prevent units from becoming too large
+	return math.min(multiplier, 2.0)
+end
+
 -- Function to create a unit instance
 function UnitDatabase.createUnit(id: string, tier: number): Unit?
 	local baseUnit = UnitDatabase.getUnitById(id)

@@ -72,6 +72,17 @@ function UnitSpawner.spawnUnitOnBoard(userId: number, unit: any, position: Vecto
 	local spawnedUnit = unitModel:Clone()
 	spawnedUnit.Name = unit.name .. "_" .. unit.id
 	
+	-- Scale unit based on tier
+	local UnitDatabase = require(game.ReplicatedStorage.Shared.UnitDatabase)
+	local sizeScale = UnitDatabase.calculateUnitSizeScale(unit.tier)
+	
+	-- Scale all parts in the model
+	for _, part in pairs(spawnedUnit:GetDescendants()) do
+		if part:IsA("BasePart") then
+			part.Size = part.Size * sizeScale
+		end
+	end
+	
 	-- Position the unit at the hex location
 	-- Adjust Y position to be on top of the hex
 	local hexCFrame = hex.CFrame
@@ -134,6 +145,17 @@ function UnitSpawner.spawnUnitOnBench(userId: number, unit: any, benchSlot: numb
 	-- Clone and position the unit model
 	local spawnedUnit = unitModel:Clone()
 	spawnedUnit.Name = unit.name .. "_" .. unit.id
+	
+	-- Scale unit based on tier
+	local UnitDatabase = require(game.ReplicatedStorage.Shared.UnitDatabase)
+	local sizeScale = UnitDatabase.calculateUnitSizeScale(unit.tier)
+	
+	-- Scale all parts in the model
+	for _, part in pairs(spawnedUnit:GetDescendants()) do
+		if part:IsA("BasePart") then
+			part.Size = part.Size * sizeScale
+		end
+	end
 	
 	-- Position the unit at the bench location
 	-- Adjust Y position to be on top of the bench
