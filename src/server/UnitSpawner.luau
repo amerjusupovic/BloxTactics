@@ -76,10 +76,19 @@ function UnitSpawner.spawnUnitOnBoard(userId: number, unit: any, position: Vecto
 	local UnitDatabase = require(game.ReplicatedStorage.Shared.UnitDatabase)
 	local sizeScale = UnitDatabase.calculateUnitSizeScale(unit.tier)
 	
-	-- Scale all parts in the model
+	-- Scale the entire model uniformly
+	-- Get the model's current pivot point
+	local originalPivot = spawnedUnit:GetPivot()
+	
+	-- Scale all parts in the model uniformly
 	for _, part in pairs(spawnedUnit:GetDescendants()) do
 		if part:IsA("BasePart") then
+			-- Scale the part size
 			part.Size = part.Size * sizeScale
+			
+			-- Scale the part's position relative to the model's pivot
+			local relativePosition = part.Position - originalPivot.Position
+			part.Position = originalPivot.Position + (relativePosition * sizeScale)
 		end
 	end
 	
@@ -150,10 +159,19 @@ function UnitSpawner.spawnUnitOnBench(userId: number, unit: any, benchSlot: numb
 	local UnitDatabase = require(game.ReplicatedStorage.Shared.UnitDatabase)
 	local sizeScale = UnitDatabase.calculateUnitSizeScale(unit.tier)
 	
-	-- Scale all parts in the model
+	-- Scale the entire model uniformly
+	-- Get the model's current pivot point
+	local originalPivot = spawnedUnit:GetPivot()
+	
+	-- Scale all parts in the model uniformly
 	for _, part in pairs(spawnedUnit:GetDescendants()) do
 		if part:IsA("BasePart") then
+			-- Scale the part size
 			part.Size = part.Size * sizeScale
+			
+			-- Scale the part's position relative to the model's pivot
+			local relativePosition = part.Position - originalPivot.Position
+			part.Position = originalPivot.Position + (relativePosition * sizeScale)
 		end
 	end
 	

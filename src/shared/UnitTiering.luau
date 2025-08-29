@@ -115,6 +115,49 @@ function UnitTiering.calculateTierUpResult(boardState: BoardState, benchState: B
 	return nil -- No tier up possible
 end
 
+-- Function to check if there are any automatic combinations that should happen
+function UnitTiering.checkForAutomaticCombinations(boardState: BoardState, benchState: BenchState): {unitId: string, targetTier: number}?
+	-- Get all unique unit types
+	local unitTypes = {}
+	
+	-- Collect unit types from board
+	if boardState and boardState.grid then
+		for _, unit in pairs(boardState.grid) do
+			if unit and unit.id then
+				unitTypes[unit.id] = true
+			end
+		end
+	end
+	
+	-- Collect unit types from bench
+	if benchState and benchState.units then
+		for _, unit in pairs(benchState.units) do
+			if unit and unit.id then
+				unitTypes[unit.id] = true
+			end
+		end
+	end
+	
+	-- Check each unit type for automatic combinations
+	for unitId, _ in pairs(unitTypes) do
+		local tier1Count = UnitTiering.countUnitsByTypeAndTier(boardState, benchState, unitId, 1)
+		local tier2Count = UnitTiering.countUnitsByTypeAndTier(boardState, benchState, unitId, 2)
+		local tier3Count = UnitTiering.countUnitsByTypeAndTier(boardState, benchState, unitId, 3)
+		
+		-- Check for tier 3 combination (3 tier 2 units)
+		if tier3Count == 0 and tier2Count >= 3 then
+			return {unitId = unitId, targetTier = 3}
+		end
+		
+		-- Check for tier 2 combination (3 tier 1 units)
+		if tier2Count == 0 and tier1Count >= 3 then
+			return {unitId = unitId, targetTier = 2}
+		end
+	end
+	
+	return nil
+end
+
 -- Function to get the star indicator type for a shop unit
 function UnitTiering.getStarIndicator(boardState: BoardState, benchState: BenchState, unitId: string): "none" | "silver" | "gold"
 	local tierUpResult = UnitTiering.calculateTierUpResult(boardState, benchState, unitId)

@@ -100,6 +100,9 @@ function ShopManager.handleUnitPurchase(userId: number, shopIndex: number)
 			-- Mark unit as sold out
 			unit.soldOut = true
 			
+			-- Check for automatic combinations after tier-up
+			ShopManager.checkAndPerformAutomaticCombinations(userId)
+			
 			-- Save player data
 			PlayerDataManager.savePlayerData(userId)
 			
@@ -134,6 +137,9 @@ function ShopManager.handleUnitPurchase(userId: number, shopIndex: number)
 			-- Mark unit as sold out instead of removing it
 			unit.soldOut = true
 			
+			-- Check for automatic combinations after placement
+			ShopManager.checkAndPerformAutomaticCombinations(userId)
+			
 			-- Save player data
 			PlayerDataManager.savePlayerData(userId)
 			
@@ -161,6 +167,9 @@ function ShopManager.handleUnitPurchase(userId: number, shopIndex: number)
 			-- Mark unit as sold out instead of removing it
 			unit.soldOut = true
 			
+			-- Check for automatic combinations after placement
+			ShopManager.checkAndPerformAutomaticCombinations(userId)
+			
 			-- Save player data
 			PlayerDataManager.savePlayerData(userId)
 			
@@ -174,6 +183,66 @@ function ShopManager.handleUnitPurchase(userId: number, shopIndex: number)
 	end
 	
 	return false
+end
+
+-- Function to check and perform automatic combinations
+function ShopManager.checkAndPerformAutomaticCombinations(userId: number)
+	local playerData = PlayerDataManager.getPlayerData(userId)
+	if not playerData then return end
+	
+	-- Check for automatic combinations
+	local combination = UnitTiering.checkForAutomaticCombinations(playerData.boardState, playerData.benchState)
+	
+	while combination do
+		-- Find units to combine
+		local unitsToCombine = UnitTiering.findUnitsToCombine(playerData.boardState, playerData.benchState, combination.unitId, combination.targetTier)
+		
+		if #unitsToCombine > 0 then
+			-- Remove the units that will be combined
+			local removedPositions = UnitTiering.removeUnitsForCombination(playerData.boardState, playerData.benchState, unitsToCombine)
+			
+			-- Remove physical units from board
+			for _, position in ipairs(removedPositions) do
+				UnitSpawner.removeUnitFromBoard(userId, position)
+			end
+			
+			-- Remove physical units from bench
+			for _, unit in ipairs(unitsToCombine) do
+				if unit.slot then -- This is a bench unit
+					UnitSpawner.removeUnitFromBench(userId, unit.slot)
+				end
+			end
+			
+			-- Create the new higher tier unit
+			local newUnit = UnitDatabase.createUnit(combination.unitId, combination.targetTier)
+			if newUnit then
+				-- Place the new unit on bench (prefer bench over board for automatic combinations)
+				local success, uniqueUnitId = Bench.addUnit(playerData.benchState, newUnit)
+				if success then
+					local benchSlot = Bench.getUnitSlot(playerData.benchState, uniqueUnitId)
+					if benchSlot then
+						UnitSpawner.spawnUnitOnBench(userId, newUnit, benchSlot)
+					end
+				else
+					-- Try to place on board if bench is full
+					local availablePosition = Board.getAvailablePositions(playerData.boardState)[1]
+					if availablePosition and Board.placeUnit(playerData.boardState, newUnit, availablePosition) then
+						UnitSpawner.spawnUnitOnBoard(userId, newUnit, availablePosition)
+					end
+				end
+				
+				-- Send notification
+				ShopManager.sendNotification(userId, "Automatic combination! Created tier " .. combination.targetTier .. " " .. newUnit.name .. "!", 3)
+			end
+		end
+		
+		-- Check for more combinations
+		combination = UnitTiering.checkForAutomaticCombinations(playerData.boardState, playerData.benchState)
+	end
+	
+	-- Update clients after all combinations
+	ShopManager.sendBoardUpdate(userId)
+	ShopManager.sendBenchUpdate(userId)
 end
 
 -- Function to send board update to client
