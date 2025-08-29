@@ -103,7 +103,8 @@ function UnitSpawner.spawnUnitOnBoard(userId: number, unit: any, position: Vecto
 	-- The model's center should be positioned at half the unit height above the hex
 	local heightOffset = unitHeight / 2
 	
-	local adjustedCFrame = CFrame.new(hexCFrame.Position + Vector3.new(0, heightOffset, 0))
+	-- Create CFrame with position and rotation to face forward
+	local adjustedCFrame = CFrame.new(hexCFrame.Position + Vector3.new(0, heightOffset, 0)) * CFrame.Angles(0, math.rad(180), 0)
 	spawnedUnit:PivotTo(adjustedCFrame)
 	
 	-- Store unit data in the model
@@ -186,7 +187,8 @@ function UnitSpawner.spawnUnitOnBench(userId: number, unit: any, benchSlot: numb
 	-- The model's center should be positioned at half the unit height above the bench
 	local heightOffset = unitHeight / 2
 	
-	local adjustedCFrame = CFrame.new(benchCFrame.Position + Vector3.new(0, heightOffset, 0))
+	-- Create CFrame with position and rotation to face forward
+	local adjustedCFrame = CFrame.new(benchCFrame.Position + Vector3.new(0, heightOffset, 0)) * CFrame.Angles(0, math.rad(180), 0)
 	spawnedUnit:PivotTo(adjustedCFrame)
 	
 	-- Store unit data in the model
@@ -272,7 +274,8 @@ function UnitSpawner.moveUnitBetweenBenchSlots(userId: number, fromSlot: number,
 		local unitSize = unitModel:GetExtentsSize()
 		local unitHeight = unitSize.Y
 		local heightOffset = unitHeight / 2
-		local adjustedCFrame = CFrame.new(benchCFrame.Position + Vector3.new(0, heightOffset, 0))
+		-- Create CFrame with position and rotation to face forward
+		local adjustedCFrame = CFrame.new(benchCFrame.Position + Vector3.new(0, heightOffset, 0)) * CFrame.Angles(0, math.rad(180), 0)
 		unitModel:PivotTo(adjustedCFrame)
 		
 		print("Moved unit from bench slot", fromSlot, "to bench slot", toSlot)
