@@ -160,15 +160,30 @@ end
 
 -- Function to get the star indicator type for a shop unit
 function UnitTiering.getStarIndicator(boardState: BoardState, benchState: BenchState, unitId: string): "none" | "silver" | "gold"
-	local tierUpResult = UnitTiering.calculateTierUpResult(boardState, benchState, unitId)
+	-- Count existing units by tier
+	local tier1Count = UnitTiering.countUnitsByTypeAndTier(boardState, benchState, unitId, 1)
+	local tier2Count = UnitTiering.countUnitsByTypeAndTier(boardState, benchState, unitId, 2)
+	local tier3Count = UnitTiering.countUnitsByTypeAndTier(boardState, benchState, unitId, 3)
 	
-	if tierUpResult == 2 then
-		return "silver" -- 2 silver stars for tier 2
-	elseif tierUpResult == 3 then
+	-- Calculate total tier 1 equivalent units
+	-- Each tier 2 unit = 3 tier 1 units
+	-- Each tier 3 unit = 9 tier 1 units
+	local totalTier1Equivalents = tier1Count + (tier2Count * 3) + (tier3Count * 9)
+	
+	-- Add the unit being purchased (assumed to be tier 1)
+	totalTier1Equivalents = totalTier1Equivalents + 1
+	
+	-- Check if we can create tier 3 (need exactly 9 tier 1 equivalents)
+	if tier3Count == 0 and totalTier1Equivalents >= 9 then
 		return "gold" -- 3 gold stars for tier 3
-	else
-		return "none" -- No stars
 	end
+	
+	-- Check if we can create tier 2 (need exactly 3 tier 1 equivalents)
+	if totalTier1Equivalents == 3 or totalTier1Equivalents == 6 then
+		return "silver" -- 2 silver stars for tier 2
+	end
+	
+	return "none" -- No stars
 end
 
 -- Function to find units to combine for tier up

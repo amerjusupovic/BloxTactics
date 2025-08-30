@@ -29,8 +29,21 @@ function Bench.addUnit(benchState: BenchState, unit: Unit): (boolean, string?)
 	-- Generate unique ID for the unit
 	local unitId = unit.id .. "_" .. os.time() .. "_" .. math.random(1000, 9999)
 	
-	-- Find the next available slot
-	local nextSlot = benchState.currentCapacity + 1
+	-- Find the first available slot
+	local nextSlot = 1
+	for slot = 1, benchState.maxCapacity do
+		local slotOccupied = false
+		for _, existingUnit in pairs(benchState.units) do
+			if existingUnit.slot == slot then
+				slotOccupied = true
+				break
+			end
+		end
+		if not slotOccupied then
+			nextSlot = slot
+			break
+		end
+	end
 	
 	-- Add unit to bench with slot information
 	benchState.units[unitId] = unit
