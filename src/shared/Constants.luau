@@ -9,7 +9,8 @@ local Constants = {}
 Constants.STARTING_GOLD = 100
 Constants.STARTING_LEVEL = 1
 Constants.MAX_LEVEL = 10
-Constants.EXPERIENCE_PER_LEVEL = 100
+Constants.BASE_EXPERIENCE_PER_LEVEL = 100 -- Base experience for exponential calculation
+Constants.EXPERIENCE_PER_LEVEL = 100 -- Legacy support, will be calculated dynamically
 Constants.LEVEL_UP_COST = 10
 Constants.LEVEL_UP_EXPERIENCE = 20
 
@@ -30,6 +31,12 @@ Constants.SHOP_REFRESH_COOLDOWN = 1 -- seconds
 Constants.INTEREST_RATE = 0.1 -- 10% interest per round
 Constants.MAX_INTEREST = 5 -- maximum gold from interest
 Constants.STREAK_BONUS = 1 -- extra gold per streak
+
+-- Combat rewards constants
+Constants.BASE_EXPERIENCE_REWARD = 10 -- Base experience per enemy level
+Constants.BASE_GOLD_REWARD = 8 -- Base gold per enemy level
+Constants.LOSER_EXPERIENCE_MULTIPLIER = 0.1 -- Loser gets 10% of base experience
+Constants.LOSER_GOLD_MULTIPLIER = 0.1 -- Loser gets 10% of base gold
 
 -- Unit tiering
 Constants.UNITS_FOR_TIER_UP = 3

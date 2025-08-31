@@ -9,6 +9,7 @@ local TweenService = game:GetService("TweenService")
 
 local Constants = require(game.ReplicatedStorage.Shared.Constants)
 local DataStructures = require(game.ReplicatedStorage.Shared.DataStructures)
+local GameUtils = require(game.ReplicatedStorage.Shared.GameUtils)
 local UITemplate = require(game.ReplicatedStorage.Shared.UITemplate)
 local PlayerData = DataStructures.PlayerData
 
@@ -140,7 +141,8 @@ function UI.updatePlayerStats(playerData: PlayerData)
 	end
 	
 	if expLabel then
-		expLabel.Text = "Exp: " .. playerData.experience .. "/" .. Constants.EXPERIENCE_PER_LEVEL
+		local expRequired = GameUtils.getExperienceRequiredForLevel(playerData.level)
+		expLabel.Text = "Exp: " .. playerData.experience .. "/" .. expRequired
 	end
 	
 	if streakLabel then

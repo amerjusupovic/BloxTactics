@@ -45,16 +45,16 @@ BloxTactics is a Teamfight Tactics (TFT) inspired game for Roblox where players 
 - [x] Create unit purchase system with gold validation
 
 ### Step 5: Leveling System
-- [ ] Implement experience gain from battles
-- [ ] Create level-up system with experience requirements
-- [ ] Update shop odds based on player level
+- [x] Implement experience gain from battles
+- [x] Create level-up system with experience requirements
+- [x] Update shop odds based on player level
 - [ ] Add level-up UI and effects
 
 ### Step 6: Gold Economy
-- [ ] Implement gold earning from battles
-- [ ] Add gold loss from unit purchases
-- [ ] Create interest system (gold earned per round)
-- [ ] Add streak bonuses (win/loss streaks)
+- [x] Implement gold earning from battles
+- [x] Add gold loss from unit purchases
+- [x] Create interest system (gold earned per round)
+- [x] Add streak bonuses (win/loss streaks)
 
 ---
 
@@ -74,9 +74,9 @@ BloxTactics is a Teamfight Tactics (TFT) inspired game for Roblox where players 
 
 ### Step 9: Unit Tiering
 - [x] Create unit combination system (3 same units = 1 higher tier)
-- [ ] Implement automatic tiering when conditions are met
-- [ ] Add tier-up effects and animations
-- [ ] Update unit stats based on tier
+- [x] Implement automatic tiering when conditions are met
+- [?] Add tier-up effects and animations
+- [x] Update unit stats based on tier
 
 ---
 

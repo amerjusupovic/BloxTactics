@@ -8,6 +8,7 @@ local Players = game:GetService("Players")
 
 local DataStructures = require(game.ReplicatedStorage.Shared.DataStructures)
 local Constants = require(game.ReplicatedStorage.Shared.Constants)
+local GameUtils = require(game.ReplicatedStorage.Shared.GameUtils)
 local PlayerData = DataStructures.PlayerData
 local BoardState = DataStructures.BoardState
 local BenchState = DataStructures.BenchState
@@ -296,10 +297,15 @@ function PlayerDataManager.addExperience(userId: number, amount: number): boolea
 	
 	playerData.experience = playerData.experience + amount
 	
-	-- Check for level up
-	while playerData.experience >= Constants.EXPERIENCE_PER_LEVEL and playerData.level < Constants.MAX_LEVEL do
-		playerData.experience = playerData.experience - Constants.EXPERIENCE_PER_LEVEL
-		playerData.level = playerData.level + 1
+	-- Check for level up with exponential experience requirements
+	while playerData.level < Constants.MAX_LEVEL do
+		local experienceRequired = GameUtils.getExperienceRequiredForLevel(playerData.level)
+		if playerData.experience >= experienceRequired then
+			playerData.experience = playerData.experience - experienceRequired
+			playerData.level = playerData.level + 1
+		else
+			break
+		end
 	end
 	
 	playerData.lastUpdated = os.time()

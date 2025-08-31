@@ -16,6 +16,7 @@ local Constants = require(game.ReplicatedStorage.Shared.Constants)
 local DataStructures = require(game.ReplicatedStorage.Shared.DataStructures)
 local UnitTiering = require(game.ReplicatedStorage.Shared.UnitTiering)
 local UnitDatabase = require(game.ReplicatedStorage.Shared.UnitDatabase)
+local GameUtils = require(game.ReplicatedStorage.Shared.GameUtils)
 
 local ShopManager = {}
 
@@ -691,7 +692,7 @@ function ShopManager.handleBoardUnitSell(userId: number, unitId: string, positio
 	end
 	
 	-- Calculate sell value (half the cost)
-	local sellValue = math.floor(unit.cost / 2)
+	local sellValue = GameUtils.calculateSellValue(unit.cost)
 	
 	-- Remove unit from board
 	local removedUnit = Board.removeUnit(playerData.boardState, position)
@@ -738,7 +739,7 @@ function ShopManager.handleBenchUnitSell(userId: number, unitId: string, positio
 	end
 	
 	-- Calculate sell value (half the cost)
-	local sellValue = math.floor(unit.cost / 2)
+	local sellValue = GameUtils.calculateSellValue(unit.cost)
 	
 	-- Remove unit from bench
 	local success = Bench.removeUnitFromSlot(playerData.benchState, benchSlot)
