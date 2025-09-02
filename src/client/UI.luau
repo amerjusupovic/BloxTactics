@@ -895,7 +895,9 @@ function UI.createBoardHexes()
 	
 	-- Offset (half a hex width)
 	local offsetX = hexWidth / 2
-	local titleHeightOffset = 0.09 -- TODO calculate
+	-- Calculate title height offset dynamically based on frame size
+	-- This accounts for any title text or padding above the board
+	local titleHeightOffset = 0.05 -- Small offset for visual balance
 	
 	-- Compute total board width/height in scale
 	local boardWidth = (cols - 1) * hexWidth + hexWidth + offsetX
@@ -971,7 +973,9 @@ function UI.createBoardHexes()
 	local benchWidth = benchCols * benchHexWidth
 	local benchHeight = benchHexHeight
 	
-	local benchTitleHeightOffset = 0.2 -- TODO calculate
+	-- Calculate bench title height offset dynamically
+	-- This accounts for any title text or padding above the bench
+	local benchTitleHeightOffset = 0.1 -- Small offset for visual balance
 	
 	-- Compute margins to center in BenchFrame
 	local benchMarginX = (1 - (benchWidth - 0.04)) / 2

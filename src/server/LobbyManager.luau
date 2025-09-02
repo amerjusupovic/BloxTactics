@@ -314,6 +314,13 @@ function LobbyManager.addPlayerToLobby(playerId: number, player: Player): boolea
 	-- Initialize player in lobby
 	LobbyManager.initializePlayerInLobby(playerId, player, lobbyData)
 	
+	-- Initialize board detection for this player after arena is created
+	spawn(function()
+		wait(2) -- Wait for arena to be fully created
+		local BoardDetection = require(script.Parent.BoardDetection)
+		BoardDetection.initializeForPlayer(playerId, player.Name)
+	end)
+	
 	print("Added player " .. player.Name .. " to lobby " .. lobbyId .. " (Total: " .. #lobbyData.players .. "/" .. MAX_PLAYERS_PER_LOBBY .. ")")
 	return true
 end

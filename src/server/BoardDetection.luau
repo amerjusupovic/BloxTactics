@@ -15,63 +15,69 @@ local playerBoardAreas = {} -- {playerId = boardArea}
 
 -- Create board area for a player
 function BoardDetection.createBoardArea(playerId: number, playerName: string)
-	-- TODO: Update to work with lobby system - ArenaSpawner is now instance-based
-	-- Use ArenaSpawner to get the Grass Arena
-	-- local ArenaSpawner = require(script.Parent.ArenaSpawner)
-	-- local grassArena = ArenaSpawner.getArena(playerId)
-	-- if not grassArena then
-	-- 	warn("Grass Arena not found for player " .. playerId .. " - arena may not be created yet")
-	-- 	return nil
-	-- end
+	-- Find the player's arena in the current workspace
+	-- Since we're using the lobby system, the arena should be in the main workspace
+	local spawnPoints = workspace:FindFirstChild("SpawnPoints")
+	if not spawnPoints then
+		warn("SpawnPoints not found in workspace - cannot create board area for " .. playerName)
+		return nil
+	end
 	
-	-- Temporary: Return nil until BoardDetection is updated for lobby system
-	warn("BoardDetection.createBoardArea is temporarily disabled - needs lobby system integration")
-	return nil
+	local playerFolder = spawnPoints:FindFirstChild(tostring(playerId))
+	if not playerFolder then
+		warn("Player folder not found for " .. playerName .. " in workspace")
+		return nil
+	end
 	
-	-- TODO: BoardDetection temporarily disabled for lobby system integration
+	local grassArena = playerFolder:FindFirstChild("Grass Arena")
+	if not grassArena then
+		warn("Grass Arena not found for player " .. playerName .. " in workspace")
+		return nil
+	end
+	
 	-- Create a detection zone around the board
-	-- local detectionZone = Instance.new("Part")
-	-- detectionZone.Name = "BoardDetectionZone"
-	-- detectionZone.Size = Vector3.new(80, 30, 80) -- Larger detection zone for better coverage
-	-- 
-	-- -- Get the position of the arena (handle both Model and Folder cases)
-	-- local arenaPosition
-	-- if grassArena:IsA("Model") then
-	-- 	-- For Models, use GetPivot() to get the center position
-	-- 	arenaPosition = grassArena:GetPivot().Position
-	-- else
-	-- 	-- For Folders, try to find a part to get position from
-	-- 	local firstPart = grassArena:FindFirstChildOfClass("BasePart")
-	-- 	if firstPart then
-	-- 	-- 	arenaPosition = firstPart.Position
-	-- 	else
-	-- 	-- 	-- Fallback to origin if no parts found
-	-- 	-- 	arenaPosition = Vector3.new(0, 0, 0)
-	-- 	-- end
-	-- end
-	-- 
-	-- detectionZone.Position = arenaPosition
-	-- detectionZone.Anchored = true
-	-- detectionZone.CanCollide = false
-	-- detectionZone.Transparency = 1 -- Invisible
-	-- detectionZone.Parent = grassArena
-	-- 
-	-- print("Created detection zone for player " .. playerName .. " at position " .. tostring(arenaPosition))
-	-- 
-	-- -- Create a folder to store the detection zone
-	-- local boardArea = Instance.new("Folder")
-	-- boardArea.Name = "BoardArea"
-	-- boardArea.Parent = grassArena
-	-- 
-	-- detectionZone.Parent = boardArea
-	-- 
-	-- -- Store reference
-	-- playerBoardAreas[playerId] = boardArea
-	-- 
-	-- -- Set up detection
-	-- BoardDetection.setupDetectionZone(detectionZone, playerId, playerName)
-	-- 
-	-- return boardArea
+	local detectionZone = Instance.new("Part")
+	detectionZone.Name = "BoardDetectionZone"
+	detectionZone.Size = Vector3.new(80, 30, 80) -- Larger detection zone for better coverage
+	
+	-- Get the position of the arena (handle both Model and Folder cases)
+	local arenaPosition
+	if grassArena:IsA("Model") then
+		-- For Models, use GetPivot() to get the center position
+		arenaPosition = grassArena:GetPivot().Position
+	else
+		-- For Folders, try to find a part to get position from
+		local firstPart = grassArena:FindFirstChildOfClass("BasePart")
+		if firstPart then
+			arenaPosition = firstPart.Position
+		else
+			-- Fallback to origin if no parts found
+			arenaPosition = Vector3.new(0, 0, 0)
+		end
+	end
+	
+	detectionZone.Position = arenaPosition
+	detectionZone.Anchored = true
+	detectionZone.CanCollide = false
+	detectionZone.Transparency = 1 -- Invisible
+	detectionZone.Parent = grassArena
+	
+	print("Created detection zone for player " .. playerName .. " at position " .. tostring(arenaPosition))
+	
+	-- Create a folder to store the detection zone
+	local boardArea = Instance.new("Folder")
+	boardArea.Name = "BoardArea"
+	boardArea.Parent = grassArena
+	
+	detectionZone.Parent = boardArea
+	
+	-- Store reference
+	playerBoardAreas[playerId] = boardArea
+	
+	-- Set up detection
+	BoardDetection.setupDetectionZone(detectionZone, playerId, playerName)
+	
+	return boardArea
 end
 
 -- Set up detection zone for a player's board
@@ -190,6 +196,15 @@ function BoardDetection.init()
 	end)
 	
 	print("Board Detection system initialized")
+end
+
+-- Function to initialize board detection for a specific player (called after lobby setup)
+function BoardDetection.initializeForPlayer(playerId: number, playerName: string)
+	-- Wait a bit for the arena to be fully created
+	spawn(function()
+		wait(1)
+		BoardDetection.createBoardArea(playerId, playerName)
+	end)
 end
 
 return BoardDetection

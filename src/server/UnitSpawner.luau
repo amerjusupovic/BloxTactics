@@ -41,8 +41,7 @@ end
 
 -- Function to spawn unit on board
 function UnitSpawner.spawnUnitOnBoard(userId: number, unit: any, position: Vector2)
-	-- TODO: Update to work with lobby system - ArenaSpawner is now instance-based
-	-- For now, use a simple approach to find the board hex
+	-- Find the player's arena in the current workspace
 	
 	print("=== UnitSpawner.spawnUnitOnBoard START ===")
 	print("Parameters - UserId:", userId, "Unit:", unit.name, "Position:", position)
@@ -142,8 +141,7 @@ end
 
 -- Function to spawn unit on bench
 function UnitSpawner.spawnUnitOnBench(userId: number, unit: any, benchSlot: number)
-	-- TODO: Update to work with lobby system - ArenaSpawner is now instance-based
-	-- For now, use a simple approach to find the bench spot
+	-- Find the player's arena in the current workspace
 	
 	print("=== UnitSpawner.spawnUnitOnBench START ===")
 	print("Parameters - UserId:", userId, "Unit:", unit.name, "BenchSlot:", benchSlot)
@@ -238,8 +236,7 @@ end
 
 -- Function to remove unit from board
 function UnitSpawner.removeUnitFromBoard(userId: number, position: Vector2)
-	-- TODO: Update to work with lobby system - ArenaSpawner is now instance-based
-	-- For now, use a simple approach to find the board hex
+	-- Find the player's arena in the current workspace
 	
 	print("=== UnitSpawner.removeUnitFromBoard START ===")
 	print("Parameters - UserId:", userId, "Position:", position)
@@ -288,8 +285,7 @@ end
 
 -- Function to remove unit from bench
 function UnitSpawner.removeUnitFromBench(userId: number, benchSlot: number)
-	-- TODO: Update to work with lobby system - ArenaSpawner is now instance-based
-	-- For now, use a simple approach to find the bench spot
+	-- Find the player's arena in the current workspace
 	
 	print("=== UnitSpawner.removeUnitFromBench START ===")
 	print("Parameters - UserId:", userId, "BenchSlot:", benchSlot)
@@ -333,8 +329,7 @@ end
 
 -- Function to move unit between bench slots
 function UnitSpawner.moveUnitBetweenBenchSlots(userId: number, fromSlot: number, toSlot: number)
-	-- TODO: Update to work with lobby system - ArenaSpawner is now instance-based
-	-- For now, use a simple approach to find the bench spots
+	-- Find the player's arena in the current workspace
 	
 	print("=== UnitSpawner.moveUnitBetweenBenchSlots START ===")
 	print("Parameters - UserId:", userId, "FromSlot:", fromSlot, "ToSlot:", toSlot)
@@ -401,8 +396,7 @@ end
 
 -- Function to clear all units for a player
 function UnitSpawner.clearPlayerUnits(userId: number)
-	-- TODO: Update to work with lobby system - ArenaSpawner is now instance-based
-	-- For now, use a simple approach to find the arena
+	-- Find the player's arena in the current workspace
 	
 	print("=== UnitSpawner.clearPlayerUnits START ===")
 	print("Parameters - UserId:", userId)

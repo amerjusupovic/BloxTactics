@@ -21,6 +21,11 @@ local function initializeGame()
 	-- Initialize the Lobby Manager (this handles everything else)
 	LobbyManager.init()
 	
+	-- Initialize Board Detection system after lobby system is ready
+	wait(1) -- Give lobby system time to initialize
+	local BoardDetection = require(script.Parent.Server.BoardDetection)
+	BoardDetection.init()
+	
 	print("Game systems initialized!")
 end
 
