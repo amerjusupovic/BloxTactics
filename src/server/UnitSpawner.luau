@@ -41,23 +41,11 @@ end
 
 -- Function to spawn unit on board
 function UnitSpawner.spawnUnitOnBoard(userId: number, unit: any, position: Vector2)
-	local spawnPointsFolder = Workspace:FindFirstChild("SpawnPoints")
-	if not spawnPointsFolder then
-		warn("SpawnPoints folder not found in Workspace!")
-		return nil
-	end
-	
-	local playerFolder = spawnPointsFolder:FindFirstChild(tostring(userId))
-	if not playerFolder then
-		warn("Player folder not found for userId: " .. userId)
-		return nil
-	end
-	
-	-- Find the board hex
-	local hexName = string.format("Hex_%d_%d", position.Y + 1, position.X + 1)
-	local hex = playerFolder:FindFirstChild(hexName)
+	-- Use ArenaSpawner to get the board hex
+	local ArenaSpawner = require(script.Parent.ArenaSpawner)
+	local hex = ArenaSpawner.getBoardHex(userId, position.Y + 1, position.X + 1)
 	if not hex then
-		warn("Board hex not found: " .. hexName)
+		warn("Board hex not found for position: " .. tostring(position))
 		return nil
 	end
 	
@@ -104,7 +92,7 @@ function UnitSpawner.spawnUnitOnBoard(userId: number, unit: any, position: Vecto
 	local heightOffset = unitHeight / 2
 	
 	-- Create CFrame with position and rotation to face forward
-	local adjustedCFrame = CFrame.new(hexCFrame.Position + Vector3.new(0, heightOffset, 0)) * CFrame.Angles(0, math.rad(180), 0)
+	local adjustedCFrame = CFrame.new(hexCFrame.Position + Vector3.new(0, heightOffset, 0)) * CFrame.Angles(0, 0, 0)
 	spawnedUnit:PivotTo(adjustedCFrame)
 	
 	-- Store unit data in the model
@@ -125,23 +113,11 @@ end
 function UnitSpawner.spawnUnitOnBench(userId: number, unit: any, benchSlot: number)
 	print("Attempting to spawn unit on bench - UserId:", userId, "Unit:", unit.name, "Slot:", benchSlot)
 	
-	local spawnPointsFolder = Workspace:FindFirstChild("SpawnPoints")
-	if not spawnPointsFolder then
-		warn("SpawnPoints folder not found in Workspace!")
-		return nil
-	end
-	
-	local playerFolder = spawnPointsFolder:FindFirstChild(tostring(userId))
-    if not playerFolder then
-		warn("Player folder not found for userId: " .. userId)
-		return nil
-	end
-	
-	-- Find the bench slot
-	local benchName = string.format("Bench_%d", benchSlot)
-	local bench = playerFolder:FindFirstChild(benchName)
+	-- Use ArenaSpawner to get the bench spot
+	local ArenaSpawner = require(script.Parent.ArenaSpawner)
+	local bench = ArenaSpawner.getBenchSpot(userId, benchSlot)
 	if not bench then
-		warn("Bench slot not found: " .. benchName .. " in player folder: " .. tostring(userId))
+		warn("Bench slot not found: " .. benchSlot .. " for player: " .. userId)
 		return nil
 	end
 	
@@ -188,7 +164,7 @@ function UnitSpawner.spawnUnitOnBench(userId: number, unit: any, benchSlot: numb
 	local heightOffset = unitHeight / 2
 	
 	-- Create CFrame with position and rotation to face forward
-	local adjustedCFrame = CFrame.new(benchCFrame.Position + Vector3.new(0, heightOffset, 0)) * CFrame.Angles(0, math.rad(180), 0)
+	local adjustedCFrame = CFrame.new(benchCFrame.Position + Vector3.new(0, heightOffset, 0)) * CFrame.Angles(0, 0, 0)
 	spawnedUnit:PivotTo(adjustedCFrame)
 	
 	-- Store unit data in the model
@@ -206,12 +182,9 @@ end
 
 -- Function to remove unit from board
 function UnitSpawner.removeUnitFromBoard(userId: number, position: Vector2)
-	local spawnPointsFolder = Workspace:FindFirstChild("SpawnPoints")
-	local playerFolder = spawnPointsFolder:FindFirstChild(tostring(userId))
-    if not playerFolder then return end
-	
-	local hexName = string.format("Hex_%d_%d", position.Y + 1, position.X + 1)
-	local hex = playerFolder:FindFirstChild(hexName)
+	-- Use ArenaSpawner to get the board hex
+	local ArenaSpawner = require(script.Parent.ArenaSpawner)
+	local hex = ArenaSpawner.getBoardHex(userId, position.Y + 1, position.X + 1)
 	if not hex then return end
 	
 	-- Remove all unit models from this hex
@@ -224,12 +197,9 @@ end
 
 -- Function to remove unit from bench
 function UnitSpawner.removeUnitFromBench(userId: number, benchSlot: number)
-	local spawnPointsFolder = Workspace:FindFirstChild("SpawnPoints")
-	local playerFolder = spawnPointsFolder and spawnPointsFolder:FindFirstChild(tostring(userId))
-    if not playerFolder then return end
-	
-	local benchName = string.format("Bench_%d", benchSlot)
-	local bench = playerFolder:FindFirstChild(benchName)
+	-- Use ArenaSpawner to get the bench spot
+	local ArenaSpawner = require(script.Parent.ArenaSpawner)
+	local bench = ArenaSpawner.getBenchSpot(userId, benchSlot)
 	if not bench then return end
 	
 	-- Remove all unit models from this bench slot
@@ -242,14 +212,10 @@ end
 
 -- Function to move unit between bench slots
 function UnitSpawner.moveUnitBetweenBenchSlots(userId: number, fromSlot: number, toSlot: number)
-	local spawnPointsFolder = Workspace:FindFirstChild("SpawnPoints")
-	local playerFolder = spawnPointsFolder and spawnPointsFolder:FindFirstChild(tostring(userId))
-    if not playerFolder then return end
-	
-	local fromBenchName = string.format("Bench_%d", fromSlot)
-	local toBenchName = string.format("Bench_%d", toSlot)
-	local fromBench = playerFolder:FindFirstChild(fromBenchName)
-	local toBench = playerFolder:FindFirstChild(toBenchName)
+	-- Use ArenaSpawner to get the bench spots
+	local ArenaSpawner = require(script.Parent.ArenaSpawner)
+	local fromBench = ArenaSpawner.getBenchSpot(userId, fromSlot)
+	local toBench = ArenaSpawner.getBenchSpot(userId, toSlot)
 	
 	if not fromBench or not toBench then return end
 	
@@ -275,7 +241,7 @@ function UnitSpawner.moveUnitBetweenBenchSlots(userId: number, fromSlot: number,
 		local unitHeight = unitSize.Y
 		local heightOffset = unitHeight / 2
 		-- Create CFrame with position and rotation to face forward
-		local adjustedCFrame = CFrame.new(benchCFrame.Position + Vector3.new(0, heightOffset, 0)) * CFrame.Angles(0, math.rad(180), 0)
+		local adjustedCFrame = CFrame.new(benchCFrame.Position + Vector3.new(0, heightOffset, 0)) * CFrame.Angles(0, 0, 0)
 		unitModel:PivotTo(adjustedCFrame)
 		
 		print("Moved unit from bench slot", fromSlot, "to bench slot", toSlot)
@@ -284,32 +250,38 @@ end
 
 -- Function to clear all units for a player
 function UnitSpawner.clearPlayerUnits(userId: number)
-	-- Check both possible folder structures
-	local spawnPointsFolder = Workspace:FindFirstChild("SpawnPoints")
-	local spawnPointsFolder = Workspace:FindFirstChild("SpawnPoints")
+	-- Use ArenaSpawner to get the arena and clear units
+	local ArenaSpawner = require(script.Parent.ArenaSpawner)
+	local grassArena = ArenaSpawner.getArena(userId)
 	
-	-- Clear units from SpawnPoints folder (board)
-	if spawnPointsFolder then
-		local playerFolder = spawnPointsFolder:FindFirstChild(tostring(userId))
-		if playerFolder then
-			for _, child in pairs(playerFolder:GetChildren()) do
-				if child.Name:find("Hex_") then
-					for _, unitModel in pairs(child:GetChildren()) do
-						if unitModel:IsA("Model") and unitModel.Name:find("_") then
-							unitModel:Destroy()
-						end
+	if grassArena then
+		-- Clear units from board hexes
+		for _, child in pairs(grassArena:GetChildren()) do
+			if child.Name:find("Hex_") then
+				for _, unitModel in pairs(child:GetChildren()) do
+					if unitModel:IsA("Model") and unitModel.Name:find("_") then
+						unitModel:Destroy()
 					end
 				end
 			end
 		end
-	end
-	
-	-- Clear units from SpawnPoints folder (bench)
-	if spawnPointsFolder then
-		local playerFolder = spawnPointsFolder:FindFirstChild(tostring(userId))
-		if playerFolder then
-			for _, child in pairs(playerFolder:GetChildren()) do
-				if child.Name:find("Bench_") then
+		
+		-- Clear units from bench spots
+		for _, child in pairs(grassArena:GetChildren()) do
+			if child.Name:find("Bench_") then
+				for _, unitModel in pairs(child:GetChildren()) do
+					if unitModel:IsA("Model") and unitModel.Name:find("_") then
+						unitModel:Destroy()
+					end
+				end
+			end
+		end
+		
+		-- Clear units from enemy board
+		local enemyBoard = ArenaSpawner.getEnemyBoard(userId)
+		if enemyBoard then
+			for _, child in pairs(enemyBoard:GetChildren()) do
+				if child.Name:find("Hex_") then
 					for _, unitModel in pairs(child:GetChildren()) do
 						if unitModel:IsA("Model") and unitModel.Name:find("_") then
 							unitModel:Destroy()

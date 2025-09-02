@@ -9,6 +9,8 @@ local UserInputService = game:GetService("UserInputService")
 
 -- Load client modules
 local UI = require(script.Parent.Client.UI)
+local PVPChallengeUI = require(script.Parent.Client.PVPChallengeUI)
+local ChallengePromptUI = require(script.Parent.Client.ChallengePromptUI)
 
 -- Load shared modules
 local Constants = require(game.ReplicatedStorage.Shared.Constants)
@@ -86,6 +88,12 @@ local function initializeClient()
 	
 	-- Create main UI
 	UI.createMainUI()
+	
+	-- Initialize PVP Challenge UI
+	PVPChallengeUI.init()
+	
+	-- Initialize Challenge Prompt UI
+	ChallengePromptUI.init()
 	
 	-- Set up RemoteEvent handlers
 	setupRemoteEventHandlers()

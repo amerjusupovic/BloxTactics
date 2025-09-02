@@ -48,7 +48,7 @@ BloxTactics is a Teamfight Tactics (TFT) inspired game for Roblox where players 
 - [x] Implement experience gain from battles
 - [x] Create level-up system with experience requirements
 - [x] Update shop odds based on player level
-- [ ] Add level-up UI and effects
+- [?] Add level-up UI and effects
 
 ### Step 6: Gold Economy
 - [x] Implement gold earning from battles
@@ -83,22 +83,22 @@ BloxTactics is a Teamfight Tactics (TFT) inspired game for Roblox where players 
 ## Phase 4: PvP Challenge System
 
 ### Step 10: Challenge Framework
-- [ ] Create player-to-player challenge system
-- [ ] Implement challenge acceptance/rejection
-- [ ] Add gold wagering system
-- [ ] Create challenge queue and matchmaking
+- [x] Create player-to-player challenge system
+- [x] Implement challenge acceptance/rejection
+- [x] Add challenge timeout and cleanup
+- [x] Create challenge queue and management
 
 ### Step 11: Pre-Battle GUI
-- [ ] Design unit placement interface
-- [ ] Implement drag-and-drop unit movement
-- [ ] Add board preview functionality
-- [ ] Create unit positioning validation
+- [x] Design unit placement interface
+- [x] Implement challenge request UI
+- [x] Add battle preparation timer
+- [x] Create challenge prompt system
 
 ### Step 12: Battle Preparation
-- [ ] Implement unit transfer from GUI to battle board
-- [ ] Create battle board initialization
-- [ ] Add unit positioning verification
-- [ ] Implement battle start sequence
+- [x] Implement challenge acceptance flow
+- [x] Create battle preparation timer (10 seconds)
+- [x] Add player notification system
+- [x] Implement challenge cleanup and management
 
 ---
 

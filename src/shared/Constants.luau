@@ -42,7 +42,7 @@ Constants.LOSER_GOLD_MULTIPLIER = 0.1 -- Loser gets 10% of base gold
 Constants.UNITS_FOR_TIER_UP = 3
 
 -- Battle constants
-Constants.BATTLE_PREPARATION_TIME = 30 -- seconds
+Constants.BATTLE_PREPARATION_TIME = 15 -- seconds
 Constants.BATTLE_TIMEOUT = 300 -- seconds
 
 -- Challenge constants
@@ -65,6 +65,10 @@ Constants.REMOTE_EVENT_NAMES = {
 	ACCEPT_CHALLENGE = "AcceptChallenge",
 	REJECT_CHALLENGE = "RejectChallenge",
 	START_BATTLE = "StartBattle",
+	START_BATTLE_PREPARATION = "StartBattlePreparation",
+	SHOW_CHALLENGE_REQUEST = "ShowChallengeRequest",
+	SHOW_CHALLENGE_PROMPT = "ShowChallengePrompt",
+	HIDE_CHALLENGE_PROMPT = "HideChallengePrompt",
 	UPDATE_BOARD = "UpdateBoard",
 	UPDATE_PLAYER_DATA = "UpdatePlayerData",
 	UPDATE_SHOP = "UpdateShop",

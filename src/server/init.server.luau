@@ -11,6 +11,9 @@ local Bench = require(script.Parent.Server.Bench)
 local RemoteEvents = require(script.Parent.Server.RemoteEvents)
 local ShopManager = require(script.Parent.Server.ShopManager)
 local UnitSpawner = require(script.Parent.Server.UnitSpawner)
+local PVPChallengeManager = require(script.Parent.Server.PVPChallengeManager)
+local BoardDetection = require(script.Parent.Server.BoardDetection)
+local ArenaSpawner = require(script.Parent.Server.ArenaSpawner)
 local Players = game:GetService("Players")
 
 -- Load shared modules
@@ -28,6 +31,11 @@ local function setupRemoteEventHandlers()
 	local refreshShopEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.REFRESH_SHOP)
 	local levelUpEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.LEVEL_UP)
 	local updatePlayerDataEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.UPDATE_PLAYER_DATA)
+	
+	-- PVP Challenge events
+	local challengePlayerEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.CHALLENGE_PLAYER)
+	local acceptChallengeEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.ACCEPT_CHALLENGE)
+	local rejectChallengeEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.REJECT_CHALLENGE)
 
 	-- Purchase unit handler
 purchaseUnitEvent.OnServerEvent:Connect(function(player, unitIndex)
@@ -180,6 +188,55 @@ end)
 			end
 		end)
 	end
+	
+	-- PVP Challenge handlers
+	challengePlayerEvent.OnServerEvent:Connect(function(player, targetPlayerId)
+		local challengerId = player.UserId
+		
+		-- Check if target player exists and can be challenged
+		if not PVPChallengeManager.canPlayerBeChallenged(targetPlayerId) then
+			local notificationEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
+			notificationEvent:FireClient(player, "This player cannot be challenged right now.", 5)
+			return
+		end
+		
+		-- Check if challenger can issue challenges
+		if PVPChallengeManager.isPlayerInChallenge(challengerId) then
+			local notificationEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
+			notificationEvent:FireClient(player, "You are already in a challenge!", 5)
+			return
+		end
+		
+		-- Create the challenge
+		local challengeId = PVPChallengeManager.createChallenge(challengerId, targetPlayerId)
+		if challengeId then
+			local notificationEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
+			notificationEvent:FireClient(player, "Challenge sent! Waiting for response...", 5)
+		else
+			local notificationEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
+			notificationEvent:FireClient(player, "Failed to send challenge.", 5)
+		end
+	end)
+	
+	acceptChallengeEvent.OnServerEvent:Connect(function(player)
+		local challengedId = player.UserId
+		local success = PVPChallengeManager.acceptChallenge(challengedId)
+		
+		if not success then
+			local notificationEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
+			notificationEvent:FireClient(player, "Failed to accept challenge.", 5)
+		end
+	end)
+	
+	rejectChallengeEvent.OnServerEvent:Connect(function(player)
+		local challengedId = player.UserId
+		local success = PVPChallengeManager.rejectChallenge(challengedId)
+		
+		if not success then
+			local notificationEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
+			notificationEvent:FireClient(player, "Failed to reject challenge.", 5)
+		end
+	end)
 end
 
 -- Set up player handlers
@@ -187,7 +244,14 @@ local function setupPlayerHandlers()
 	-- Player joining
 	Players.PlayerAdded:Connect(function(player)
 		local userId = player.UserId
-		print("Player " .. player.Name .. " joined, initializing shop...")
+		print("Player " .. player.Name .. " joined, initializing arena and shop...")
+		
+		-- Create the player's arena structure
+		local grassArena = ArenaSpawner.createGrassArena(userId, player.Name)
+		if not grassArena then
+			warn("Failed to create arena for player " .. player.Name)
+			return
+		end
 		
 		-- Load player data and restore board state
 		local playerData = PlayerDataManager.loadPlayerData(userId, player.Name)
@@ -233,12 +297,24 @@ local function setupPlayerHandlers()
 		
 		ShopManager.cleanupPlayer(userId)
 		UnitSpawner.clearPlayerUnits(userId)
+		
+		-- Remove the player's arena
+		ArenaSpawner.removeArena(userId)
 	end)
 end
 
 -- Initialize game systems
 local function initializeGame()
 	print("Initializing BloxTactics game systems...")
+	
+	-- Initialize PVP Challenge Manager
+	PVPChallengeManager.init()
+	
+	-- Initialize Board Detection system
+	BoardDetection.init()
+	
+	-- Initialize Arena Spawner
+	ArenaSpawner.init()
 	
 	-- Set up RemoteEvent handlers
 	setupRemoteEventHandlers()
