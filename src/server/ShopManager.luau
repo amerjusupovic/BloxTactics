@@ -11,7 +11,7 @@ local Shop = require(script.Parent.Shop)
 local Board = require(script.Parent.Board)
 local Bench = require(script.Parent.Bench)
 local UnitSpawner = require(script.Parent.UnitSpawner)
-local RemoteEvents = require(script.Parent.RemoteEvents)
+-- local RemoteEvents = require(script.Parent.RemoteEvents) -- No longer needed, using direct access
 local Constants = require(game.ReplicatedStorage.Shared.Constants)
 local DataStructures = require(game.ReplicatedStorage.Shared.DataStructures)
 local UnitTiering = require(game.ReplicatedStorage.Shared.UnitTiering)
@@ -53,9 +53,12 @@ function ShopManager.sendShopToClient(userId: number)
 	-- Update shop units with star indicators
 	local updatedShopUnits = Shop.updateShopWithStarIndicators(shopData.units, playerData.boardState, playerData.benchState)
 	
-	local updateShopEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.UPDATE_SHOP)
+	local updateShopEvent = game.ReplicatedStorage.RemoteEvents:WaitForChild("UpdateShop")
 	if updateShopEvent then
 		updateShopEvent:FireClient(player, updatedShopUnits)
+		print("Sent shop update to client for user: " .. userId)
+	else
+		warn("UpdateShop RemoteEvent not found!")
 	end
 end
 
@@ -149,6 +152,9 @@ function ShopManager.handleUnitPurchase(userId: number, shopIndex: number)
 			ShopManager.sendBoardUpdate(userId)
 			ShopManager.sendNotification(userId, "Unit placed on board!", 2)
 			
+			-- Send updated player data to client
+			ShopManager.sendPlayerDataUpdate(userId)
+			
 			return true
 		end
 	else
@@ -178,6 +184,9 @@ function ShopManager.handleUnitPurchase(userId: number, shopIndex: number)
 			ShopManager.sendShopToClient(userId)
 			ShopManager.sendBenchUpdate(userId)
 			ShopManager.sendNotification(userId, "Unit placed on bench!", 2)
+			
+			-- Send updated player data to client
+			ShopManager.sendPlayerDataUpdate(userId)
 			
 			return true
 		end
@@ -254,9 +263,12 @@ function ShopManager.sendBoardUpdate(userId: number)
 	local playerData = PlayerDataManager.getPlayerData(userId)
 	if not playerData then return end
 	
-	local updateBoardEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.UPDATE_BOARD)
+	local updateBoardEvent = game.ReplicatedStorage.RemoteEvents:WaitForChild("UpdateBoard")
 	if updateBoardEvent then
 		updateBoardEvent:FireClient(player, playerData.boardState)
+		print("Sent board update to client for user: " .. userId)
+	else
+		warn("UpdateBoard RemoteEvent not found!")
 	end
 end
 
@@ -268,9 +280,12 @@ function ShopManager.sendBenchUpdate(userId: number)
 	local playerData = PlayerDataManager.getPlayerData(userId)
 	if not playerData then return end
 	
-	local updateBenchEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.UPDATE_BENCH)
+	local updateBenchEvent = game.ReplicatedStorage.RemoteEvents:WaitForChild("UpdateBench")
 	if updateBenchEvent then
 		updateBenchEvent:FireClient(player, playerData.benchState)
+		print("Sent bench update to client for user: " .. userId)
+	else
+		warn("UpdateBench RemoteEvent not found!")
 	end
 end
 
@@ -279,9 +294,29 @@ function ShopManager.sendNotification(userId: number, message: string, duration:
 	local player = Players:GetPlayerByUserId(userId)
 	if not player then return end
 	
-	local notificationEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
+	local notificationEvent = game.ReplicatedStorage.RemoteEvents:WaitForChild("ShowNotification")
 	if notificationEvent then
 		notificationEvent:FireClient(player, message, duration)
+		print("Sent notification to client for user: " .. userId .. ": " .. message)
+	else
+		warn("ShowNotification RemoteEvent not found!")
+	end
+end
+
+-- Function to send player data update to client
+function ShopManager.sendPlayerDataUpdate(userId: number)
+	local player = Players:GetPlayerByUserId(userId)
+	if not player then return end
+	
+	local playerData = PlayerDataManager.getPlayerData(userId)
+	if not playerData then return end
+	
+	local updatePlayerDataEvent = game.ReplicatedStorage.RemoteEvents:WaitForChild("UpdatePlayerData")
+	if updatePlayerDataEvent then
+		updatePlayerDataEvent:FireClient(player, playerData)
+		print("Sent player data update to client for user: " .. userId)
+	else
+		warn("UpdatePlayerData RemoteEvent not found!")
 	end
 end
 
@@ -310,6 +345,9 @@ function ShopManager.refreshShop(userId: number)
 	-- Send to client
 	ShopManager.sendShopToClient(userId)
 	ShopManager.sendNotification(userId, "Shop refreshed!", 2)
+	
+	-- Send updated player data to client
+	ShopManager.sendPlayerDataUpdate(userId)
 	
 	return true
 end
@@ -809,6 +847,9 @@ function ShopManager.handleLevelUp(userId: number): boolean
 	if levelGained > 0 then
 		ShopManager.sendNotification(userId, "Level up! You are now level " .. newPlayerData.level .. "!", 3)
 	end
+	
+	-- Send updated player data to client
+	ShopManager.sendPlayerDataUpdate(userId)
 	
 	return true
 end

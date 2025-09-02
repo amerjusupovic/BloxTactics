@@ -9,15 +9,23 @@ local Constants = require(game.ReplicatedStorage.Shared.Constants)
 
 local ArenaSpawner = {}
 
+-- Constructor for creating a new ArenaSpawner instance
+function ArenaSpawner.new(workspace: Workspace, spawnPoints: Folder): any
+	local self = setmetatable({}, {__index = ArenaSpawner})
+	self.workspace = workspace
+	self.spawnPoints = spawnPoints
+	return self
+end
+
 -- Function to create the Grass Arena structure for a player
-function ArenaSpawner.createGrassArena(playerId: number, playerName: string): Folder?
-	local spawnPoints = Workspace:FindFirstChild("SpawnPoints")
+function ArenaSpawner:createGrassArena(playerId: number, playerName: string): Folder?
+	local spawnPoints = self.spawnPoints
 	if not spawnPoints then
 		-- Create SpawnPoints folder if it doesn't exist
 		spawnPoints = Instance.new("Folder")
 		spawnPoints.Name = "SpawnPoints"
-		spawnPoints.Parent = Workspace
-		print("Created SpawnPoints folder in Workspace")
+		spawnPoints.Parent = self.workspace
+		print("Created SpawnPoints folder in lobby workspace")
 	end
 	
 	-- Create or get player folder
@@ -64,7 +72,19 @@ function ArenaSpawner.createGrassArena(playerId: number, playerName: string): Fo
 	
 	-- Set the arena position
 	if clonedArena:IsA("Model") then
+		-- For Models, use PivotTo to set the position
 		clonedArena:PivotTo(CFrame.new(arenaPosition))
+		
+		-- Also ensure the PrimaryPart is set if it exists
+		if not clonedArena.PrimaryPart then
+			-- Try to find a suitable primary part
+			for _, child in pairs(clonedArena:GetChildren()) do
+				if child:IsA("BasePart") then
+					clonedArena.PrimaryPart = child
+					break
+				end
+			end
+		end
 	else
 		-- If it's a folder, try to position its children
 		for _, child in pairs(clonedArena:GetChildren()) do
@@ -77,13 +97,22 @@ function ArenaSpawner.createGrassArena(playerId: number, playerName: string): Fo
 	-- Parent the cloned arena to the player folder
 	clonedArena.Parent = playerFolder
 	
+	-- Debug: Print the actual position after cloning
+	local actualPosition
+	if clonedArena:IsA("Model") then
+		actualPosition = clonedArena:GetPivot().Position
+	else
+		actualPosition = arenaPosition
+	end
+	
 	print("Successfully cloned Grass Arena for player " .. playerName .. " at position " .. tostring(arenaPosition))
+	print("Actual arena position: " .. tostring(actualPosition))
 	return clonedArena
 end
 
 -- Function to remove arena for a player
-function ArenaSpawner.removeArena(playerId: number)
-	local spawnPoints = Workspace:FindFirstChild("SpawnPoints")
+function ArenaSpawner:removeArena(playerId: number)
+	local spawnPoints = self.spawnPoints
 	if not spawnPoints then
 		return
 	end
@@ -96,8 +125,8 @@ function ArenaSpawner.removeArena(playerId: number)
 end
 
 -- Function to get arena for a player
-function ArenaSpawner.getArena(playerId: number): Folder?
-	local spawnPoints = Workspace:FindFirstChild("SpawnPoints")
+function ArenaSpawner:getArena(playerId: number): Folder?
+	local spawnPoints = self.spawnPoints
 	if not spawnPoints then
 		return nil
 	end
@@ -111,8 +140,8 @@ function ArenaSpawner.getArena(playerId: number): Folder?
 end
 
 -- Function to get enemy board for a player
-function ArenaSpawner.getEnemyBoard(playerId: number): Folder?
-	local grassArena = ArenaSpawner.getArena(playerId)
+function ArenaSpawner:getEnemyBoard(playerId: number): Folder?
+	local grassArena = self:getArena(playerId)
 	if not grassArena then
 		return nil
 	end
@@ -122,8 +151,8 @@ function ArenaSpawner.getEnemyBoard(playerId: number): Folder?
 end
 
 -- Function to get a specific hex on the player's board
-function ArenaSpawner.getBoardHex(playerId: number, row: number, col: number): Part?
-	local grassArena = ArenaSpawner.getArena(playerId)
+function ArenaSpawner:getBoardHex(playerId: number, row: number, col: number): Part?
+	local grassArena = self:getArena(playerId)
 	if not grassArena then
 		return nil
 	end
@@ -133,8 +162,8 @@ function ArenaSpawner.getBoardHex(playerId: number, row: number, col: number): P
 end
 
 -- Function to get a specific hex on the enemy board
-function ArenaSpawner.getEnemyHex(playerId: number, row: number, col: number): Part?
-	local enemyBoard = ArenaSpawner.getEnemyBoard(playerId)
+function ArenaSpawner:getEnemyHex(playerId: number, row: number, col: number): Part?
+	local enemyBoard = self:getEnemyBoard(playerId)
 	if not enemyBoard then
 		return nil
 	end
@@ -144,8 +173,8 @@ function ArenaSpawner.getEnemyHex(playerId: number, row: number, col: number): P
 end
 
 -- Function to get a specific bench spot
-function ArenaSpawner.getBenchSpot(userId: number, benchIndex: number): Part?
-	local grassArena = ArenaSpawner.getArena(userId)
+function ArenaSpawner:getBenchSpot(userId: number, benchIndex: number): Part?
+	local grassArena = self:getArena(userId)
 	if not grassArena then
 		return nil
 	end

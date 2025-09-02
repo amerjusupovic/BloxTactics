@@ -30,7 +30,14 @@ local function setupRemoteEventHandlers()
 	-- Handle player data updates
 	updatePlayerDataEvent.OnClientEvent:Connect(function(playerData)
 		-- Update UI with new player data
-		UI.updatePlayerStats(playerData)
+		print("Received player data update from server")
+		print("Player data received:", playerData)
+		if playerData then
+			print("Gold:", playerData.gold, "Level:", playerData.level, "Exp:", playerData.experience)
+			UI.updatePlayerStats(playerData)
+		else
+			warn("Received nil player data from server!")
+		end
 	end)
 	
 	-- Handle shop updates
@@ -61,20 +68,29 @@ end
 -- Set up keybind handlers
 local function setupKeybindHandlers()
 	UserInputService.InputBegan:Connect(function(input, gameProcessed)
-		if gameProcessed then return end
-
+		if gameProcessed then 
+			print("Input was processed by game, ignoring keybind")
+			return 
+		end
+		
 		if input.KeyCode == Enum.KeyCode.F then
+			print("F key pressed - toggling shop...")
 			UI.toggleShop()
 		elseif input.KeyCode == Enum.KeyCode.C then
+			print("C key pressed - toggling board...")
 			UI.toggleBoard()
 		elseif input.KeyCode == Enum.KeyCode.R then
+			print("R key pressed - resetting player data...")
 			-- Reset player data (for testing)
 			UI.resetPlayerData()
 		elseif input.KeyCode == Enum.KeyCode.Escape then
+			print("Escape key pressed - clearing selection...")
 			-- Clear unit selection
 			UI.clearSelection()
 		end
 	end)
+	
+	print("Keybind handler connected successfully!")
 end
 
 -- Request player data from server
@@ -87,22 +103,34 @@ local function initializeClient()
 	print("Initializing BloxTactics client systems...")
 	
 	-- Create main UI
+	print("Creating main UI...")
 	UI.createMainUI()
+	print("Main UI created successfully!")
 	
 	-- Initialize PVP Challenge UI
+	print("Initializing PVP Challenge UI...")
 	PVPChallengeUI.init()
+	print("PVP Challenge UI initialized!")
 	
 	-- Initialize Challenge Prompt UI
+	print("Initializing Challenge Prompt UI...")
 	ChallengePromptUI.init()
+	print("Challenge Prompt UI initialized!")
 	
 	-- Set up RemoteEvent handlers
+	print("Setting up RemoteEvent handlers...")
 	setupRemoteEventHandlers()
+	print("RemoteEvent handlers set up successfully!")
 	
 	-- Set up keybind handlers
+	print("Setting up keybind handlers...")
 	setupKeybindHandlers()
+	print("Keybind handlers set up successfully!")
 	
 	-- Request initial player data
+	print("Requesting initial player data...")
 	requestPlayerData()
+	print("Initial player data requested!")
 	
 	print("Client systems initialized!")
 end

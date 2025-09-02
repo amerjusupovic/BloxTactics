@@ -37,29 +37,50 @@ local selectedHex = nil
 
 -- Function to create the main UI
 function UI.createMainUI()
+	print("UI.createMainUI() called")
+	
 	-- Create main GUI from template
+	print("Cloning UI template...")
 	mainGui = UITemplate.cloneTemplate()
+	if not mainGui then
+		warn("Failed to clone UI template!")
+		return
+	end
+	
+	print("UI template cloned successfully")
 	mainGui.Name = "BloxTacticsUI"
 	mainGui.Parent = playerGui
+	print("Main GUI parented to PlayerGui")
 	
 	-- Get references to UI elements
+	print("Looking for MainFrame...")
 	local mainFrame = mainGui:FindFirstChild("MainFrame")
 	if not mainFrame then
 		warn("MainFrame not found in UI template!")
 		return
 	end
+	print("MainFrame found successfully")
 	
+	print("Looking for UI frames...")
 	shopFrame = mainFrame:FindFirstChild("ShopFrame")
 	boardFrame = mainFrame:FindFirstChild("BoardFrame")
 	benchFrame = mainFrame:FindFirstChild("BenchFrame")
 	statsFrame = mainFrame:FindFirstChild("StatsFrame")
 	sellUnitFrame = mainFrame:FindFirstChild("SellUnitFrame")
 	
+	print("UI frames found:")
+	print("  shopFrame:", shopFrame and "YES" or "NO")
+	print("  boardFrame:", boardFrame and "YES" or "NO")
+	print("  benchFrame:", benchFrame and "YES" or "NO")
+	print("  statsFrame:", statsFrame and "YES" or "NO")
+	print("  sellUnitFrame:", sellUnitFrame and "YES" or "NO")
+	
 	-- Verify all frames exist
 	if not shopFrame or not boardFrame or not benchFrame or not statsFrame or not sellUnitFrame then
 		warn("One or more UI frames not found in template!")
 		return
 	end
+	print("All UI frames found successfully!")
 
 	local shopTitle = nil
 	local boardTitle = nil
@@ -121,33 +142,54 @@ function UI.createMainUI()
 	end
 	
 	print("UI created successfully from template!")
+	print("UI state summary:")
+	print("  mainGui:", mainGui and "YES" or "NO")
+	print("  shopFrame:", shopFrame and "YES" or "NO")
+	print("  boardFrame:", boardFrame and "YES" or "NO")
+	print("  benchFrame:", benchFrame and "YES" or "NO")
+	print("  statsFrame:", statsFrame and "YES" or "NO")
+	print("  sellUnitFrame:", sellUnitFrame and "YES" or "NO")
 end
 
 -- Function to update player stats display
 function UI.updatePlayerStats(playerData: PlayerData)
-	if not statsFrame then return end
+	print("=== UI.updatePlayerStats START ===")
+	print("Player data received:", playerData)
+	
+	if not statsFrame then 
+		warn("Stats frame not found!")
+		return 
+	end
 	
 	local goldLabel = statsFrame:FindFirstChild("GoldLabel")
 	local levelLabel = statsFrame:FindFirstChild("LevelLabel")
 	local expLabel = statsFrame:FindFirstChild("ExpLabel")
 	local streakLabel = statsFrame:FindFirstChild("StreakLabel")
 	
+	print("Found UI elements - Gold:", goldLabel and "YES" or "NO", "Level:", levelLabel and "YES" or "NO", "Exp:", expLabel and "YES" or "NO", "Streak:", streakLabel and "YES" or "NO")
+	
 	if goldLabel then
 		goldLabel.Text = "Gold: " .. playerData.gold
+		print("Updated gold label to:", goldLabel.Text)
 	end
 	
 	if levelLabel then
 		levelLabel.Text = "Level: " .. playerData.level
+		print("Updated level label to:", levelLabel.Text)
 	end
 	
 	if expLabel then
 		local expRequired = GameUtils.getExperienceRequiredForLevel(playerData.level)
 		expLabel.Text = "Exp: " .. playerData.experience .. "/" .. expRequired
+		print("Updated exp label to:", expLabel.Text)
 	end
 	
 	if streakLabel then
 		streakLabel.Text = "Streak: " .. playerData.streak
+		print("Updated streak label to:", streakLabel.Text)
 	end
+	
+	print("=== UI.updatePlayerStats SUCCESS ===")
 end
 
 -- Function to create unit button
@@ -170,6 +212,8 @@ end
 
 -- Function to create shop unit button
 function UI.createShopUnitButton(unit: DataStructures.Unit, parent: GuiObject, onClick: () -> ())
+	print("Creating shop button for unit:", unit.name, "Cost:", unit.cost)
+	
 	local button = Instance.new("ImageButton")
 	button.Size = UDim2.new(0.18, 0, 0.6, 0)
 	button.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
@@ -219,7 +263,11 @@ function UI.createShopUnitButton(unit: DataStructures.Unit, parent: GuiObject, o
 		infoLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 	else
 		-- Add click handler only if not sold out
-		button.MouseButton1Click:Connect(onClick)
+		print("Adding click handler for unit:", unit.name)
+		button.MouseButton1Click:Connect(function()
+			print("Shop button clicked for unit:", unit.name)
+			onClick()
+		end)
 	end
 	
 	-- Store unit data in button (only primitive types)
@@ -258,9 +306,12 @@ end
 
 -- Function to handle unit purchase
 function UI.handleUnitPurchase(unit: DataStructures.Unit, shopIndex: number)
+	print("handleUnitPurchase called for unit:", unit.name, "shopIndex:", shopIndex)
+	
 	-- Fire RemoteEvent to server
 	local purchaseUnitEvent = game.ReplicatedStorage.RemoteEvents:WaitForChild("PurchaseUnit")
 	if purchaseUnitEvent then
+		print("PurchaseUnit RemoteEvent found, firing server event...")
 		purchaseUnitEvent:FireServer(shopIndex)
 	else
 		warn("PurchaseUnit RemoteEvent not found!")
@@ -567,10 +618,16 @@ end
 
 -- Function to toggle shop visibility
 function UI.toggleShop()
-	if not shopFrame then return end
+	print("UI.toggleShop() called")
+	if not shopFrame then 
+		warn("shopFrame is nil in toggleShop!")
+		return 
+	end
 	
+	print("shopFrame found, toggling visibility...")
 	shopVisible = not shopVisible
 	shopFrame.Visible = shopVisible
+	print("Shop visibility set to:", shopVisible)
 	
 	-- Show notification
 	-- local message = shopVisible and "Shop opened" or "Shop closed"
@@ -579,11 +636,17 @@ end
 
 -- Function to toggle board visibility
 function UI.toggleBoard()
-	if not boardFrame or not benchFrame then return end
+	print("UI.toggleBoard() called")
+	if not boardFrame or not benchFrame then 
+		warn("boardFrame or benchFrame is nil in toggleBoard!")
+		return 
+	end
 	
+	print("boardFrame and benchFrame found, toggling visibility...")
 	boardVisible = not boardVisible
 	boardFrame.Visible = boardVisible
 	benchFrame.Visible = boardVisible
+	print("Board visibility set to:", boardVisible)
 	
 	-- Show/hide sell area based on board visibility and selection
 	if sellUnitFrame then
@@ -779,13 +842,17 @@ end
 
 -- Function to reset player data (for testing)
 function UI.resetPlayerData()
+	print("=== UI.resetPlayerData START ===")
 	local resetEvent = game.ReplicatedStorage.RemoteEvents:WaitForChild("ResetPlayerData")
 	if resetEvent then
+		print("Firing ResetPlayerData RemoteEvent...")
 		resetEvent:FireServer()
+		print("ResetPlayerData RemoteEvent fired successfully")
 		UI.showNotification("Player data reset!", 3)
 	else
 		warn("ResetPlayerData RemoteEvent not found!")
 	end
+	print("=== UI.resetPlayerData END ===")
 end
 
 -- Function to show notification

@@ -320,6 +320,10 @@ function PlayerDataManager.resetPlayerData(userId: number): boolean
 		return false
 	end
 	
+	-- Clear physical units from the workspace before resetting data
+	local UnitSpawner = require(script.Parent.UnitSpawner)
+	UnitSpawner.clearPlayerUnits(userId)
+	
 	-- Remove from data store
 	local success, error = pcall(function()
 		playerDataStore:RemoveAsync(tostring(userId))
@@ -333,7 +337,11 @@ function PlayerDataManager.resetPlayerData(userId: number): boolean
 	-- Remove from cache
 	playerDataCache[userId] = nil
 	
-	print("Player data reset successfully for user: " .. userId)
+	-- Create fresh default player data
+	local newPlayerData = createDefaultPlayerData(userId, player.Name)
+	playerDataCache[userId] = newPlayerData
+	
+	print("Player data reset successfully for user: " .. userId .. " - new data created")
 	return true
 end
 

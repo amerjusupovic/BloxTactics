@@ -41,11 +41,40 @@ end
 
 -- Function to spawn unit on board
 function UnitSpawner.spawnUnitOnBoard(userId: number, unit: any, position: Vector2)
-	-- Use ArenaSpawner to get the board hex
-	local ArenaSpawner = require(script.Parent.ArenaSpawner)
-	local hex = ArenaSpawner.getBoardHex(userId, position.Y + 1, position.X + 1)
+	-- TODO: Update to work with lobby system - ArenaSpawner is now instance-based
+	-- For now, use a simple approach to find the board hex
+	
+	print("=== UnitSpawner.spawnUnitOnBoard START ===")
+	print("Parameters - UserId:", userId, "Unit:", unit.name, "Position:", position)
+	
+	-- Find the player's arena in the current workspace
+	local playerFolder = workspace:FindFirstChild("SpawnPoints"):FindFirstChild(tostring(userId))
+	if not playerFolder then
+		warn("Player folder not found for: " .. userId)
+		print("=== UnitSpawner.spawnUnitOnBoard FAILED - No player folder ===")
+		return nil
+	end
+	print("Player folder found:", playerFolder.Name)
+	
+	local grassArena = playerFolder:FindFirstChild("Grass Arena")
+	if not grassArena then
+		warn("Grass Arena not found for player: " .. userId)
+		print("=== UnitSpawner.spawnUnitOnBoard FAILED - No Grass Arena ===")
+		return nil
+	end
+	print("Grass Arena found:", grassArena.Name)
+	
+	-- Find the board hex (convert position to hex name)
+	-- Position (3, 3) should map to Hex_4_4 (client expectation)
+	-- Convert from 0-indexed coordinates to 1-indexed hex names
+	local hexRow = position.Y + 1
+	local hexCol = position.X + 1
+	local hexName = "Hex_" .. hexRow .. "_" .. hexCol
+	
+	local hex = grassArena:FindFirstChild(hexName)
 	if not hex then
-		warn("Board hex not found for position: " .. tostring(position))
+		warn("Board hex not found for position: " .. tostring(position) .. " (looking for " .. hexName .. ")")
+		print("=== UnitSpawner.spawnUnitOnBoard FAILED - No board hex ===")
 		return nil
 	end
 	
@@ -53,6 +82,7 @@ function UnitSpawner.spawnUnitOnBoard(userId: number, unit: any, position: Vecto
 	local unitModel = UnitSpawner.getUnitModel(unit.name)
 	if not unitModel then
 		warn("Unit model not found for: " .. unit.name)
+		print("=== UnitSpawner.spawnUnitOnBoard FAILED - No unit model ===")
 		return nil
 	end
 	
@@ -105,26 +135,51 @@ function UnitSpawner.spawnUnitOnBoard(userId: number, unit: any, position: Vecto
 	-- Parent to the hex
 	spawnedUnit.Parent = hex
 	
-	print("Spawned unit " .. unit.name .. " on board at position: " .. tostring(position))
+	print("Successfully spawned unit " .. unit.name .. " on board at position: " .. tostring(position))
+	print("=== UnitSpawner.spawnUnitOnBoard SUCCESS ===")
 	return spawnedUnit
 end
 
 -- Function to spawn unit on bench
 function UnitSpawner.spawnUnitOnBench(userId: number, unit: any, benchSlot: number)
-	print("Attempting to spawn unit on bench - UserId:", userId, "Unit:", unit.name, "Slot:", benchSlot)
+	-- TODO: Update to work with lobby system - ArenaSpawner is now instance-based
+	-- For now, use a simple approach to find the bench spot
 	
-	-- Use ArenaSpawner to get the bench spot
-	local ArenaSpawner = require(script.Parent.ArenaSpawner)
-	local bench = ArenaSpawner.getBenchSpot(userId, benchSlot)
-	if not bench then
-		warn("Bench slot not found: " .. benchSlot .. " for player: " .. userId)
+	print("=== UnitSpawner.spawnUnitOnBench START ===")
+	print("Parameters - UserId:", userId, "Unit:", unit.name, "BenchSlot:", benchSlot)
+	print("Unit object:", unit)
+	
+	-- Find the player's arena in the current workspace
+	local playerFolder = workspace:FindFirstChild("SpawnPoints"):FindFirstChild(tostring(userId))
+	if not playerFolder then
+		warn("Player folder not found for: " .. userId)
+		print("=== UnitSpawner.spawnUnitOnBench FAILED - No player folder ===")
 		return nil
 	end
+	
+	local grassArena = playerFolder:FindFirstChild("Grass Arena")
+	if not grassArena then
+		warn("Grass Arena not found for player: " .. userId)
+		print("=== UnitSpawner.spawnUnitOnBench FAILED - No Grass Arena ===")
+		return nil
+	end
+	
+	-- Find the bench spot
+	local bench = grassArena:FindFirstChild("Bench_" .. benchSlot)
+	if not bench then
+		warn("Bench slot not found: " .. benchSlot .. " for player: " .. userId)
+		print("=== UnitSpawner.spawnUnitOnBench FAILED - No bench slot ===")
+		return nil
+	end
+	
+	-- Re-enable unit spawning temporarily
+	print("Attempting to spawn unit on bench - UserId:", userId, "Unit:", unit.name, "Slot:", benchSlot)
 	
 	-- Get unit model
 	local unitModel = UnitSpawner.getUnitModel(unit.name)
 	if not unitModel then
 		warn("Unit model not found for: " .. unit.name)
+		print("=== UnitSpawner.spawnUnitOnBench FAILED - No unit model ===")
 		return nil
 	end
 	
@@ -177,47 +232,138 @@ function UnitSpawner.spawnUnitOnBench(userId: number, unit: any, benchSlot: numb
 	spawnedUnit.Parent = bench
 	
 	print("Successfully spawned unit " .. unit.name .. " on bench at slot: " .. benchSlot)
+	print("=== UnitSpawner.spawnUnitOnBench SUCCESS ===")
 	return spawnedUnit
 end
 
 -- Function to remove unit from board
 function UnitSpawner.removeUnitFromBoard(userId: number, position: Vector2)
-	-- Use ArenaSpawner to get the board hex
-	local ArenaSpawner = require(script.Parent.ArenaSpawner)
-	local hex = ArenaSpawner.getBoardHex(userId, position.Y + 1, position.X + 1)
-	if not hex then return end
+	-- TODO: Update to work with lobby system - ArenaSpawner is now instance-based
+	-- For now, use a simple approach to find the board hex
+	
+	print("=== UnitSpawner.removeUnitFromBoard START ===")
+	print("Parameters - UserId:", userId, "Position:", position)
+	
+	-- Find the player's arena in the current workspace
+	local playerFolder = workspace:FindFirstChild("SpawnPoints"):FindFirstChild(tostring(userId))
+	if not playerFolder then
+		warn("Player folder not found for: " .. userId)
+		print("=== UnitSpawner.removeUnitFromBoard FAILED - No player folder ===")
+		return
+	end
+	
+	local grassArena = playerFolder:FindFirstChild("Grass Arena")
+	if not grassArena then
+		warn("Grass Arena not found for player: " .. userId)
+		print("=== UnitSpawner.removeUnitFromBoard FAILED - No Grass Arena ===")
+		return
+	end
+	
+	-- Find the board hex (convert position to hex name)
+	-- Convert from 0-indexed coordinates to 1-indexed hex names
+	local hexRow = position.Y + 1
+	local hexCol = position.X + 1
+	local hexName = "Hex_" .. hexRow .. "_" .. hexCol
+	
+	local hex = grassArena:FindFirstChild(hexName)
+	if not hex then
+		warn("Board hex not found for position: " .. tostring(position) .. " (looking for " .. hexName .. ")")
+		print("=== UnitSpawner.removeUnitFromBoard FAILED - No board hex ===")
+		return
+	end
 	
 	-- Remove all unit models from this hex
+	local removedCount = 0
 	for _, child in pairs(hex:GetChildren()) do
 		if child:IsA("Model") and child.Name:find("_") then
+			print("Removing unit model:", child.Name)
 			child:Destroy()
+			removedCount = removedCount + 1
 		end
 	end
+	
+	print("Removed " .. removedCount .. " unit models from board position " .. tostring(position))
+	print("=== UnitSpawner.removeUnitFromBoard SUCCESS ===")
 end
 
 -- Function to remove unit from bench
 function UnitSpawner.removeUnitFromBench(userId: number, benchSlot: number)
-	-- Use ArenaSpawner to get the bench spot
-	local ArenaSpawner = require(script.Parent.ArenaSpawner)
-	local bench = ArenaSpawner.getBenchSpot(userId, benchSlot)
-	if not bench then return end
+	-- TODO: Update to work with lobby system - ArenaSpawner is now instance-based
+	-- For now, use a simple approach to find the bench spot
+	
+	print("=== UnitSpawner.removeUnitFromBench START ===")
+	print("Parameters - UserId:", userId, "BenchSlot:", benchSlot)
+	
+	-- Find the player's arena in the current workspace
+	local playerFolder = workspace:FindFirstChild("SpawnPoints"):FindFirstChild(tostring(userId))
+	if not playerFolder then
+		warn("Player folder not found for: " .. userId)
+		print("=== UnitSpawner.removeUnitFromBench FAILED - No player folder ===")
+		return
+	end
+	
+	local grassArena = playerFolder:FindFirstChild("Grass Arena")
+	if not grassArena then
+		warn("Grass Arena not found for player: " .. userId)
+		print("=== UnitSpawner.removeUnitFromBench FAILED - No Grass Arena ===")
+		return
+	end
+	
+	-- Find the bench spot
+	local bench = grassArena:FindFirstChild("Bench_" .. benchSlot)
+	if not bench then
+		warn("Bench slot not found: " .. benchSlot .. " for player: " .. userId)
+		print("=== UnitSpawner.removeUnitFromBench FAILED - No bench slot ===")
+		return
+	end
 	
 	-- Remove all unit models from this bench slot
+	local removedCount = 0
 	for _, child in pairs(bench:GetChildren()) do
 		if child:IsA("Model") and child.Name:find("_") then
+			print("Removing unit model:", child.Name)
 			child:Destroy()
+			removedCount = removedCount + 1
 		end
 	end
+	
+	print("Removed " .. removedCount .. " unit models from bench slot " .. benchSlot)
+	print("=== UnitSpawner.removeUnitFromBench SUCCESS ===")
 end
 
 -- Function to move unit between bench slots
 function UnitSpawner.moveUnitBetweenBenchSlots(userId: number, fromSlot: number, toSlot: number)
-	-- Use ArenaSpawner to get the bench spots
-	local ArenaSpawner = require(script.Parent.ArenaSpawner)
-	local fromBench = ArenaSpawner.getBenchSpot(userId, fromSlot)
-	local toBench = ArenaSpawner.getBenchSpot(userId, toSlot)
+	-- TODO: Update to work with lobby system - ArenaSpawner is now instance-based
+	-- For now, use a simple approach to find the bench spots
 	
-	if not fromBench or not toBench then return end
+	print("=== UnitSpawner.moveUnitBetweenBenchSlots START ===")
+	print("Parameters - UserId:", userId, "FromSlot:", fromSlot, "ToSlot:", toSlot)
+	
+	-- Find the player's arena in the current workspace
+	local playerFolder = workspace:FindFirstChild("SpawnPoints"):FindFirstChild(tostring(userId))
+	if not playerFolder then
+		warn("Player folder not found for: " .. userId)
+		print("=== UnitSpawner.moveUnitBetweenBenchSlots FAILED - No player folder ===")
+		return
+	end
+	
+	local grassArena = playerFolder:FindFirstChild("Grass Arena")
+	if not grassArena then
+		warn("Grass Arena not found for player: " .. userId)
+		print("=== UnitSpawner.moveUnitBetweenBenchSlots FAILED - No Grass Arena ===")
+		return
+	end
+	print("Grass Arena found:", grassArena.Name)
+	
+	-- Find the bench spots
+	local fromBench = grassArena:FindFirstChild("Bench_" .. fromSlot)
+	local toBench = grassArena:FindFirstChild("Bench_" .. toSlot)
+	
+	if not fromBench or not toBench then
+		warn("Bench spots not found - From: " .. fromSlot .. ", To: " .. toSlot)
+		print("=== UnitSpawner.moveUnitBetweenBenchSlots FAILED - No bench spots ===")
+		return
+	end
 	
 	-- Find the unit model in the source bench slot
 	local unitModel = nil
@@ -228,7 +374,7 @@ function UnitSpawner.moveUnitBetweenBenchSlots(userId: number, fromSlot: number,
 		end
 	end
 	
-	if unitModel then
+	if unitModel then		
 		-- Update the bench slot attribute
 		unitModel:SetAttribute("BenchSlot", toSlot)
 		
@@ -240,57 +386,72 @@ function UnitSpawner.moveUnitBetweenBenchSlots(userId: number, fromSlot: number,
 		local unitSize = unitModel:GetExtentsSize()
 		local unitHeight = unitSize.Y
 		local heightOffset = unitHeight / 2
+		
 		-- Create CFrame with position and rotation to face forward
 		local adjustedCFrame = CFrame.new(benchCFrame.Position + Vector3.new(0, heightOffset, 0)) * CFrame.Angles(0, 0, 0)
 		unitModel:PivotTo(adjustedCFrame)
 		
-		print("Moved unit from bench slot", fromSlot, "to bench slot", toSlot)
+		print("Successfully moved unit from bench slot " .. fromSlot .. " to bench slot " .. toSlot)
+		print("=== UnitSpawner.moveUnitBetweenBenchSlots SUCCESS ===")
+	else
+		print("No unit model found in source bench slot " .. fromSlot)
+		print("=== UnitSpawner.moveUnitBetweenBenchSlots FAILED - No unit to move ===")
 	end
 end
 
 -- Function to clear all units for a player
 function UnitSpawner.clearPlayerUnits(userId: number)
-	-- Use ArenaSpawner to get the arena and clear units
-	local ArenaSpawner = require(script.Parent.ArenaSpawner)
-	local grassArena = ArenaSpawner.getArena(userId)
+	-- TODO: Update to work with lobby system - ArenaSpawner is now instance-based
+	-- For now, use a simple approach to find the arena
 	
-	if grassArena then
-		-- Clear units from board hexes
-		for _, child in pairs(grassArena:GetChildren()) do
-			if child.Name:find("Hex_") then
-				for _, unitModel in pairs(child:GetChildren()) do
-					if unitModel:IsA("Model") and unitModel.Name:find("_") then
-						unitModel:Destroy()
-					end
-				end
-			end
-		end
-		
-		-- Clear units from bench spots
-		for _, child in pairs(grassArena:GetChildren()) do
-			if child.Name:find("Bench_") then
-				for _, unitModel in pairs(child:GetChildren()) do
-					if unitModel:IsA("Model") and unitModel.Name:find("_") then
-						unitModel:Destroy()
-					end
-				end
-			end
-		end
-		
-		-- Clear units from enemy board
-		local enemyBoard = ArenaSpawner.getEnemyBoard(userId)
-		if enemyBoard then
-			for _, child in pairs(enemyBoard:GetChildren()) do
-				if child.Name:find("Hex_") then
-					for _, unitModel in pairs(child:GetChildren()) do
-						if unitModel:IsA("Model") and unitModel.Name:find("_") then
-							unitModel:Destroy()
-						end
-					end
+	print("=== UnitSpawner.clearPlayerUnits START ===")
+	print("Parameters - UserId:", userId)
+	
+	-- Find the player's arena in the current workspace
+	local playerFolder = workspace:FindFirstChild("SpawnPoints"):FindFirstChild(tostring(userId))
+	if not playerFolder then
+		warn("PlayerFolder not found for: " .. userId)
+		print("=== UnitSpawner.clearPlayerUnits FAILED - No player folder ===")
+		return
+	end
+	
+	local grassArena = playerFolder:FindFirstChild("Grass Arena")
+	if not grassArena then
+		warn("Grass Arena not found for player: " .. userId)
+		print("=== UnitSpawner.clearPlayerUnits FAILED - No Grass Arena ===")
+		return
+	end
+	
+	local totalRemoved = 0
+	
+	-- Clear units from board hexes
+	for _, child in pairs(grassArena:GetChildren()) do
+		if child.Name:find("Hex_") then
+			for _, unitModel in pairs(child:GetChildren()) do
+				if unitModel:IsA("Model") and unitModel.Name:find("_") then
+					print("Removing board unit:", unitModel.Name, "from", child.Name)
+					unitModel:Destroy()
+					totalRemoved = totalRemoved + 1
 				end
 			end
 		end
 	end
+	
+	-- Clear units from bench spots
+	for _, child in pairs(grassArena:GetChildren()) do
+		if child.Name:find("Bench_") then
+			for _, unitModel in pairs(child:GetChildren()) do
+				if unitModel:IsA("Model") and unitModel.Name:find("_") then
+					print("Removing bench unit:", unitModel.Name, "from", child.Name)
+					unitModel:Destroy()
+					totalRemoved = totalRemoved + 1
+				end
+			end
+		end
+	end
+	
+	print("Cleared " .. totalRemoved .. " total units for player " .. userId)
+	print("=== UnitSpawner.clearPlayerUnits SUCCESS ===")
 end
 
 -- Initialize unit models when the module loads

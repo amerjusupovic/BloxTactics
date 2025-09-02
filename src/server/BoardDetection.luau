@@ -15,38 +15,63 @@ local playerBoardAreas = {} -- {playerId = boardArea}
 
 -- Create board area for a player
 function BoardDetection.createBoardArea(playerId: number, playerName: string)
+	-- TODO: Update to work with lobby system - ArenaSpawner is now instance-based
 	-- Use ArenaSpawner to get the Grass Arena
-	local ArenaSpawner = require(script.Parent.ArenaSpawner)
-	local grassArena = ArenaSpawner.getArena(playerId)
-	if not grassArena then
-		warn("Grass Arena not found for player " .. playerId .. " - arena may not be created yet")
-		return nil
-	end
+	-- local ArenaSpawner = require(script.Parent.ArenaSpawner)
+	-- local grassArena = ArenaSpawner.getArena(playerId)
+	-- if not grassArena then
+	-- 	warn("Grass Arena not found for player " .. playerId .. " - arena may not be created yet")
+	-- 	return nil
+	-- end
 	
+	-- Temporary: Return nil until BoardDetection is updated for lobby system
+	warn("BoardDetection.createBoardArea is temporarily disabled - needs lobby system integration")
+	return nil
+	
+	-- TODO: BoardDetection temporarily disabled for lobby system integration
 	-- Create a detection zone around the board
-	local detectionZone = Instance.new("Part")
-	detectionZone.Name = "BoardDetectionZone"
-	detectionZone.Size = Vector3.new(50, 20, 50) -- Adjust size based on your board
-	detectionZone.Position = grassArena.Position
-	detectionZone.Anchored = true
-	detectionZone.CanCollide = false
-	detectionZone.Transparency = 1 -- Invisible
-	detectionZone.Parent = grassArena
-	
-	-- Create a folder to store the detection zone
-	local boardArea = Instance.new("Folder")
-	boardArea.Name = "BoardArea"
-	boardArea.Parent = grassArena
-	
-	detectionZone.Parent = boardArea
-	
-	-- Store reference
-	playerBoardAreas[playerId] = boardArea
-	
-	-- Set up detection
-	BoardDetection.setupDetectionZone(detectionZone, playerId, playerName)
-	
-	return boardArea
+	-- local detectionZone = Instance.new("Part")
+	-- detectionZone.Name = "BoardDetectionZone"
+	-- detectionZone.Size = Vector3.new(80, 30, 80) -- Larger detection zone for better coverage
+	-- 
+	-- -- Get the position of the arena (handle both Model and Folder cases)
+	-- local arenaPosition
+	-- if grassArena:IsA("Model") then
+	-- 	-- For Models, use GetPivot() to get the center position
+	-- 	arenaPosition = grassArena:GetPivot().Position
+	-- else
+	-- 	-- For Folders, try to find a part to get position from
+	-- 	local firstPart = grassArena:FindFirstChildOfClass("BasePart")
+	-- 	if firstPart then
+	-- 	-- 	arenaPosition = firstPart.Position
+	-- 	else
+	-- 	-- 	-- Fallback to origin if no parts found
+	-- 	-- 	arenaPosition = Vector3.new(0, 0, 0)
+	-- 	-- end
+	-- end
+	-- 
+	-- detectionZone.Position = arenaPosition
+	-- detectionZone.Anchored = true
+	-- detectionZone.CanCollide = false
+	-- detectionZone.Transparency = 1 -- Invisible
+	-- detectionZone.Parent = grassArena
+	-- 
+	-- print("Created detection zone for player " .. playerName .. " at position " .. tostring(arenaPosition))
+	-- 
+	-- -- Create a folder to store the detection zone
+	-- local boardArea = Instance.new("Folder")
+	-- boardArea.Name = "BoardArea"
+	-- boardArea.Parent = grassArena
+	-- 
+	-- detectionZone.Parent = boardArea
+	-- 
+	-- -- Store reference
+	-- playerBoardAreas[playerId] = boardArea
+	-- 
+	-- -- Set up detection
+	-- BoardDetection.setupDetectionZone(detectionZone, playerId, playerName)
+	-- 
+	-- return boardArea
 end
 
 -- Set up detection zone for a player's board
@@ -61,9 +86,16 @@ function BoardDetection.setupDetectionZone(detectionZone: Part, boardOwnerId: nu
 		local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
 		if not humanoidRootPart then return false end
 		
-		-- Simple distance check (can be improved with more sophisticated collision detection)
-		local distance = (humanoidRootPart.Position - detectionZone.Position).Magnitude
-		return distance <= detectionZone.Size.Magnitude / 2
+		-- Check if player is within the detection zone bounds
+		local playerPos = humanoidRootPart.Position
+		local zonePos = detectionZone.Position
+		local zoneSize = detectionZone.Size
+		
+		-- Check if player is within the rectangular bounds of the zone
+		local halfSize = zoneSize / 2
+		return math.abs(playerPos.X - zonePos.X) <= halfSize.X and
+			   math.abs(playerPos.Y - zonePos.Y) <= halfSize.Y and
+			   math.abs(playerPos.Z - zonePos.Z) <= halfSize.Z
 	end
 	
 	-- Function to handle player entering zone
