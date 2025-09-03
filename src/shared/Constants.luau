@@ -53,6 +53,12 @@ Constants.CHALLENGE_TIMEOUT = 60 -- seconds
 -- UI constants
 Constants.UI_UPDATE_RATE = 0.1 -- seconds
 
+-- Arena and Lobby constants
+Constants.GROUND_LEVEL = 0
+Constants.ARENA_SPACING = 300
+Constants.LOBBY_SPACING = 2000
+Constants.MAX_PLAYERS_PER_LOBBY = 6
+
 -- Network constants
 Constants.REMOTE_EVENT_NAMES = {
 	PURCHASE_UNIT = "PurchaseUnit",

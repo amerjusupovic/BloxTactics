@@ -17,6 +17,33 @@ local challengePromptFrame = nil
 local currentBoardOwnerId = nil
 local currentBoardOwnerName = nil
 
+-- Get the existing ChallengeFrame from BloxTacticsUITemplate
+local function getChallengeFrame()
+	if challengeFrame then
+		return challengeFrame
+	end
+	
+	-- Wait for the UI template to be available
+	local uiTemplate = ReplicatedStorage:WaitForChild("BloxTacticsUITemplate")
+	local mainFrame = uiTemplate:WaitForChild("MainFrame")
+	local templateChallengeFrame = mainFrame:WaitForChild("ChallengeFrame")
+	
+	-- Clone the ChallengeFrame to the client's PlayerGui
+	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+	challengeFrame = templateChallengeFrame:Clone()
+	challengeFrame.Parent = playerGui
+	
+	-- Get the ChallengeLabel
+	challengeLabel = challengeFrame:WaitForChild("ChallengeLabel")
+	
+	print("CHALLENGE FRAME", uiTemplate, mainFrame, challengeFrame, challengeLabel)
+	
+	-- Hide initially
+	challengeFrame.Visible = false
+	
+	return challengeFrame
+end
+
 -- Create challenge prompt UI
 function ChallengePromptUI.createChallengePromptUI()
 	if challengePromptFrame then

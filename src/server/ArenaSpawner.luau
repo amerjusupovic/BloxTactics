@@ -1,34 +1,74 @@
 --[[
 	ArenaSpawner.luau
-	Clones existing arena models for each player when they join
+	Handles spawning and managing arenas for players
 ]]
 
-local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Constants = require(game.ReplicatedStorage.Shared.Constants)
 
 local ArenaSpawner = {}
 
--- Constructor for creating a new ArenaSpawner instance
-function ArenaSpawner.new(workspace: Workspace, spawnPoints: Folder): any
+-- Track baseplates for each lobby
+local lobbyBaseplates = {} -- {lobbyId = baseplate}
+
+-- Constructor
+function ArenaSpawner.new(workspace, spawnPoints)
 	local self = setmetatable({}, {__index = ArenaSpawner})
 	self.workspace = workspace
 	self.spawnPoints = spawnPoints
 	return self
 end
 
--- Function to create the Grass Arena structure for a player
-function ArenaSpawner:createGrassArena(playerId: number, playerName: string): Folder?
-	local spawnPoints = self.spawnPoints
-	if not spawnPoints then
-		-- Create SpawnPoints folder if it doesn't exist
-		spawnPoints = Instance.new("Folder")
-		spawnPoints.Name = "SpawnPoints"
-		spawnPoints.Parent = self.workspace
-		print("Created SpawnPoints folder in lobby workspace")
+-- Function to create a baseplate for a lobby if it doesn't exist
+function ArenaSpawner:createLobbyBaseplate(lobbyId: number): BasePart?
+	-- Check if baseplate already exists for this lobby
+	if lobbyBaseplates[lobbyId] then
+		return lobbyBaseplates[lobbyId]
 	end
 	
-	-- Create or get player folder
+	-- Don't create baseplate for lobby 1 since it already exists at (0, 0, 0)
+	if lobbyId == 1 then
+		return nil
+	end
+	
+	-- Find the existing baseplate in the workspace
+	local existingBaseplate = workspace:FindFirstChild("Baseplate")
+	if not existingBaseplate then
+		warn("No existing baseplate found in workspace")
+		return nil
+	end
+	
+	-- Clone the existing baseplate
+	local baseplate = existingBaseplate:Clone()
+	baseplate.Name = "LobbyBaseplate_" .. lobbyId
+	
+	-- Position the cloned baseplate for this lobby
+	local baseplatePosition = Vector3.new(
+		(lobbyId - 1) * Constants.LOBBY_SPACING, -- Start second lobby at 2000, third at 4000, etc.
+		0, -- Same Y level as original baseplate
+		0 -- Center of the lobby area
+	)
+	baseplate.Position = baseplatePosition
+	
+	-- Parent the baseplate to the workspace
+	baseplate.Parent = workspace
+	
+	-- Store the baseplate reference
+	lobbyBaseplates[lobbyId] = baseplate
+	
+	print("Cloned baseplate for lobby " .. lobbyId .. " at position " .. tostring(baseplatePosition))
+	return baseplate
+end
+
+-- Function to create a grass arena for a player
+function ArenaSpawner:createGrassArena(playerId: number, playerName: string, playerIndex: number): Model?
+	local spawnPoints = self.spawnPoints
+	if not spawnPoints then
+		warn("No spawn points folder found for arena creation")
+		return nil
+	end
+	
+	-- Create player folder if it doesn't exist
 	local playerFolder = spawnPoints:FindFirstChild(tostring(playerId))
 	if not playerFolder then
 		playerFolder = Instance.new("Folder")
@@ -37,23 +77,10 @@ function ArenaSpawner:createGrassArena(playerId: number, playerName: string): Fo
 		print("Created player folder for " .. playerName .. " (ID: " .. playerId .. ")")
 	end
 	
-	-- Check if Grass Arena already exists
-	local grassArena = playerFolder:FindFirstChild("Grass Arena")
-	if grassArena then
-		print("Grass Arena already exists for player " .. playerName)
-		return grassArena
-	end
-	
-	-- Get the existing Grass Arena model from ReplicatedStorage
-	local arenasFolder = ReplicatedStorage:FindFirstChild("Arenas")
-	if not arenasFolder then
-		warn("Arenas folder not found in ReplicatedStorage!")
-		return nil
-	end
-	
-	local grassArenaModel = arenasFolder:FindFirstChild("Grass Arena")
+	-- Get the Grass Arena model from ReplicatedStorage
+	local grassArenaModel = ReplicatedStorage:FindFirstChild("Arenas"):FindFirstChild("Grass Arena")
 	if not grassArenaModel then
-		warn("Grass Arena model not found in ReplicatedStorage -> Arenas!")
+		warn("Grass Arena model not found in ReplicatedStorage.Arenas")
 		return nil
 	end
 	
@@ -71,10 +98,27 @@ function ArenaSpawner:createGrassArena(playerId: number, playerName: string): Fo
 		lobbyId = tonumber(lobbyFolder.Name:match("Lobby_(%d+)")) or 1
 	end
 	
+	-- Ensure baseplate exists for this lobby (except lobby 1 which uses existing baseplate)
+	if lobbyId > 1 then
+		self:createLobbyBaseplate(lobbyId)
+	end
+	
+	-- Use the playerIndex passed from the lobby manager for positioning
+	-- This ensures arena positioning is synchronized with lobby player counts
+	
+	-- Calculate arena position in a 2x3 grid layout
+	-- Grid layout: 2 rows (Z), 3 columns (X)
+	-- Z = ARENA_SPACING/2: Players 1, 2, 3 (front row)
+	-- Z = -ARENA_SPACING/2: Players 4, 5, 6 (back row)
+	-- X positions: -ARENA_SPACING, 0, ARENA_SPACING (left, center, right)
+	local row = math.floor((playerIndex - 1) / 3)  -- 0 or 1 (which Z level)
+	local column = (playerIndex - 1) % 3  -- 0, 1, or 2 (which X position)
+	
+	-- Calculate arena position relative to the lobby baseplate
 	local arenaPosition = Vector3.new(
-		(lobbyId - 1) * 1000, -- Start first lobby at 0, subsequent lobbies at 1000, 2000, etc.
-		0, -- Ground level
-		(playerId % 100) * 50 -- Spread players within lobby by 50 units
+		(lobbyId - 1) * Constants.LOBBY_SPACING + (column - 1) * Constants.ARENA_SPACING, -- X: lobby offset + grid X position
+		Constants.GROUND_LEVEL, -- Slightly above the baseplate
+		(row == 0) and Constants.ARENA_SPACING/2 or -Constants.ARENA_SPACING/2 -- Z: ARENA_SPACING/2 for front row, -ARENA_SPACING/2 for back row
 	)
 	
 	-- Set the arena position
@@ -128,6 +172,27 @@ function ArenaSpawner:removeArena(playerId: number)
 	if playerFolder then
 		playerFolder:Destroy()
 		print("Removed arena for player ID: " .. playerId)
+	end
+	
+	-- Check if this was the last arena in the lobby and cleanup baseplate if needed
+	local lobbyFolder = self.spawnPoints.Parent
+	if lobbyFolder and lobbyFolder.Name:find("Lobby_") then
+		local lobbyId = tonumber(lobbyFolder.Name:match("Lobby_(%d+)")) or 1
+		local remainingArenas = 0
+		
+		-- Count remaining arenas in this lobby
+		for _, child in pairs(spawnPoints:GetChildren()) do
+			if child:FindFirstChild("Grass Arena") then
+				remainingArenas = remainingArenas + 1
+			end
+		end
+		
+		-- If no arenas left and this lobby has a custom baseplate (not lobby 1), cleanup the baseplate
+		if remainingArenas == 0 and lobbyId > 1 and lobbyBaseplates[lobbyId] then
+			lobbyBaseplates[lobbyId]:Destroy()
+			lobbyBaseplates[lobbyId] = nil
+			print("Cleaned up baseplate for lobby " .. lobbyId .. " - no more arenas")
+		end
 	end
 end
 
@@ -188,6 +253,20 @@ function ArenaSpawner:getBenchSpot(userId: number, benchIndex: number): Part?
 	
 	local benchName = string.format("Bench_%d", benchIndex)
 	return grassArena:FindFirstChild(benchName)
+end
+
+-- Function to cleanup baseplate for a specific lobby
+function ArenaSpawner:cleanupLobbyBaseplate(lobbyId: number)
+	-- Don't cleanup baseplate for lobby 1 since it's the original baseplate
+	if lobbyId == 1 then
+		return
+	end
+	
+	if lobbyBaseplates[lobbyId] then
+		lobbyBaseplates[lobbyId]:Destroy()
+		lobbyBaseplates[lobbyId] = nil
+		print("Cleaned up baseplate for lobby " .. lobbyId)
+	end
 end
 
 -- Initialize arena spawning for all existing players

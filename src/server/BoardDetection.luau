@@ -37,7 +37,7 @@ function BoardDetection.createBoardArea(playerId: number, playerName: string, lo
 	-- Create a detection zone around the board
 	local detectionZone = Instance.new("Part")
 	detectionZone.Name = "BoardDetectionZone"
-	detectionZone.Size = Vector3.new(80, 30, 80) -- Larger detection zone for better coverage
+	detectionZone.Size = Vector3.new(120, 10, 120) -- 60 unit radius detection zone, thinner height for better positioning
 	
 	-- Get the position of the arena (handle both Model and Folder cases)
 	local arenaPosition
@@ -55,7 +55,8 @@ function BoardDetection.createBoardArea(playerId: number, playerName: string, lo
 		end
 	end
 	
-	detectionZone.Position = arenaPosition
+	-- Position the zone at character height (5 units above ground)
+	detectionZone.Position = Vector3.new(arenaPosition.X, 5, arenaPosition.Z)
 	detectionZone.Anchored = true
 	detectionZone.CanCollide = false
 	detectionZone.Transparency = 1 -- Invisible
@@ -91,16 +92,15 @@ function BoardDetection.setupDetectionZone(detectionZone: Part, boardOwnerId: nu
 		local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
 		if not humanoidRootPart then return false end
 		
-		-- Check if player is within the detection zone bounds
+		-- Check if player is within the circular detection zone (60 unit radius)
 		local playerPos = humanoidRootPart.Position
 		local zonePos = detectionZone.Position
-		local zoneSize = detectionZone.Size
 		
-		-- Check if player is within the rectangular bounds of the zone
-		local halfSize = zoneSize / 2
-		return math.abs(playerPos.X - zonePos.X) <= halfSize.X and
-			   math.abs(playerPos.Y - zonePos.Y) <= halfSize.Y and
-			   math.abs(playerPos.Z - zonePos.Z) <= halfSize.Z
+		-- Calculate distance from zone center
+		local distance = (playerPos - zonePos).Magnitude
+		local radius = 60 -- 60 unit radius as requested
+		
+		return distance <= radius
 	end
 	
 	-- Function to handle player entering zone
@@ -110,7 +110,7 @@ function BoardDetection.setupDetectionZone(detectionZone: Part, boardOwnerId: nu
 		end
 		
 		if playersInZone[player.UserId] then
-			return -- Already in zone
+			return -- Already in zone 
 		end
 		
 		playersInZone[player.UserId] = true

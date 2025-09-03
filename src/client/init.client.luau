@@ -63,6 +63,21 @@ local function setupRemoteEventHandlers()
 	showNotificationEvent.OnClientEvent:Connect(function(message, duration)
 		UI.showNotification(message, duration)
 	end)
+	
+	-- Handle challenge prompt events
+	local showChallengePromptEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.SHOW_CHALLENGE_PROMPT)
+	showChallengePromptEvent.OnClientEvent:Connect(function(boardOwnerId, boardOwnerName)
+		print("Received show challenge prompt event for player " .. boardOwnerName .. " (ID: " .. boardOwnerId .. ")")
+		ChallengePromptUI.showChallengePrompt(boardOwnerId, boardOwnerName)
+	end)
+	
+	local hideChallengePromptEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.HIDE_CHALLENGE_PROMPT)
+	hideChallengePromptEvent.OnClientEvent:Connect(function()
+		print("Received hide challenge prompt event")
+		ChallengePromptUI.hideChallengePrompt()
+	end)
+	
+
 end
 
 -- Set up keybind handlers

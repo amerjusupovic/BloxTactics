@@ -5,6 +5,7 @@
 
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Constants = require(game.ReplicatedStorage.Shared.Constants)
 local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting")
 local Terrain = workspace.Terrain
@@ -12,7 +13,7 @@ local Terrain = workspace.Terrain
 local LobbyManager = {}
 
 -- Lobby configuration
-local MAX_PLAYERS_PER_LOBBY = 8
+local MAX_PLAYERS_PER_LOBBY = Constants.MAX_PLAYERS_PER_LOBBY
 
 -- Lobby storage
 local lobbies = {} -- {lobbyId = lobbyData}
@@ -23,6 +24,7 @@ local nextLobbyId = 1
 local LobbyData = {
 	lobbyId = 0,
 	players = {}, -- {playerId = player}
+	playerCount = 0, -- Track actual number of players
 	workspace = nil, -- The cloned workspace folder for this lobby
 	spawnPoints = nil, -- The SpawnPoints folder for this lobby
 	arenaSpawner = nil, -- ArenaSpawner instance for this lobby
@@ -61,6 +63,7 @@ function LobbyManager.createLobby(): number
 	local lobbyData = {
 		lobbyId = lobbyId,
 		players = {},
+		playerCount = 0,
 		workspace = createLobbyWorkspace(lobbyId),
 		spawnPoints = nil,
 		arenaSpawner = nil,
@@ -218,7 +221,7 @@ function LobbyManager.findOrCreateLobbyForPlayer(playerId: number): number
 	
 	-- Find a lobby with available space
 	for lobbyId, lobbyData in pairs(lobbies) do
-		if #lobbyData.players < MAX_PLAYERS_PER_LOBBY then
+		if lobbyData.playerCount < MAX_PLAYERS_PER_LOBBY then
 			return lobbyId
 		end
 	end
@@ -238,17 +241,21 @@ function LobbyManager.addPlayerToLobby(playerId: number, player: Player): boolea
 	end
 	
 	-- Check if lobby is full
-	if #lobbyData.players >= MAX_PLAYERS_PER_LOBBY then
+	if lobbyData.playerCount >= MAX_PLAYERS_PER_LOBBY then
 		warn("Lobby " .. lobbyId .. " is full, cannot add player " .. player.Name)
 		return false
 	end
 	
 	-- Add player to lobby
 	lobbyData.players[playerId] = player
+	lobbyData.playerCount = lobbyData.playerCount + 1
 	playerLobbies[playerId] = lobbyId
 	
+	-- Get the current player count for this lobby for positioning
+	local playerIndex = lobbyData.playerCount
+	
 	-- Initialize player in lobby (this creates the arena and player folder)
-	LobbyManager.initializePlayerInLobby(playerId, player, lobbyData)
+	LobbyManager.initializePlayerInLobby(playerId, player, lobbyData, playerIndex)
 	
 	-- Position player at lobby location in main workspace (don't move character to lobby workspace)
 	spawn(function()
@@ -258,11 +265,19 @@ function LobbyManager.addPlayerToLobby(playerId: number, player: Player): boolea
 		-- Keep character in main workspace, just position it at the lobby location
 		-- Use the same positioning logic as ArenaSpawner for consistency
 		local lobbyId = lobbyData.lobbyId
-		local playerOffset = (playerId % 100) * 50 -- Same as arena positioning (50 units between players)
+		
+		-- Calculate character position in the same 2x3 grid layout as arenas
+		-- Grid layout: 2 rows (Z), 3 columns (X)
+		-- Z = ARENA_SPACING/2: Players 1, 2, 3 (front row)
+		-- Z = -ARENA_SPACING/2: Players 4, 5, 6 (back row)
+		-- X positions: -ARENA_SPACING, 0, ARENA_SPACING (left, center, right)
+		local row = math.floor((playerIndex - 1) / 3)  -- 0 or 1 (which Z level)
+		local column = (playerIndex - 1) % 3  -- 0, 1, or 2 (which X position)
+		
 		local lobbyCenter = Vector3.new(
-			(lobbyId - 1) * 1000, -- Start first lobby at 0, subsequent lobbies at 1000, 2000, etc.
+			(lobbyId - 1) * Constants.LOBBY_SPACING + (column - 1) * Constants.ARENA_SPACING, -- X: lobby offset + grid X position
 			5, -- Slightly above ground
-			playerOffset -- Same Z offset as arena
+			(row == 0) and Constants.ARENA_SPACING/2 or -Constants.ARENA_SPACING/2 -- Z: ARENA_SPACING/2 for front row, -ARENA_SPACING/2 for back row
 		)
 		character:PivotTo(CFrame.new(lobbyCenter))
 		
@@ -276,14 +291,14 @@ function LobbyManager.addPlayerToLobby(playerId: number, player: Player): boolea
 		BoardDetection.initializeForPlayer(playerId, player.Name, lobbyData)
 	end)
 	
-	print("Added player " .. player.Name .. " to lobby " .. lobbyId .. " (Total: " .. #lobbyData.players .. "/" .. MAX_PLAYERS_PER_LOBBY .. ")")
+	print("Added player " .. player.Name .. " to lobby " .. lobbyId .. " (Total: " .. lobbyData.playerCount .. "/" .. MAX_PLAYERS_PER_LOBBY .. ")")
 	return true
 end
 
 -- Function to initialize a player in a specific lobby
-function LobbyManager.initializePlayerInLobby(playerId: number, player: Player, lobbyData: any)
+function LobbyManager.initializePlayerInLobby(playerId: number, player: Player, lobbyData: any, playerIndex: number)
 	-- Create the player's arena structure
-	local grassArena = lobbyData.arenaSpawner:createGrassArena(playerId, player.Name)
+	local grassArena = lobbyData.arenaSpawner:createGrassArena(playerId, player.Name, playerIndex)
 	if not grassArena then
 		warn("Failed to create arena for player " .. player.Name .. " in lobby " .. lobbyData.lobbyId)
 		return
@@ -339,10 +354,10 @@ function LobbyManager.removePlayerFromLobby(playerId: number)
 	-- Cleanup player resources using the arena spawner
 	lobbyData.arenaSpawner:removeArena(playerId)
 	
-	print("Removed player " .. playerId .. " from lobby " .. lobbyId .. " (Remaining: " .. #lobbyData.players .. ")")
+	print("Removed player " .. playerId .. " from lobby " .. lobbyId .. " (Remaining: " .. lobbyData.playerCount .. ")")
 	
 	-- Check if lobby is empty and can be cleaned up
-	if #lobbyData.players == 0 then
+	if lobbyData.playerCount == 0 then
 		LobbyManager.cleanupEmptyLobby(lobbyId)
 	end
 end
@@ -352,6 +367,11 @@ function LobbyManager.cleanupEmptyLobby(lobbyId: number)
 	local lobbyData = lobbies[lobbyId]
 	if not lobbyData then
 		return
+	end
+	
+	-- Cleanup the baseplate for this lobby
+	if lobbyData.arenaSpawner then
+		lobbyData.arenaSpawner:cleanupLobbyBaseplate(lobbyId)
 	end
 	
 	-- Destroy the lobby workspace
@@ -390,11 +410,11 @@ function LobbyManager.getLobbyStats(): {any}
 	
 	for lobbyId, lobbyData in pairs(lobbies) do
 		stats.totalLobbies = stats.totalLobbies + 1
-		stats.totalPlayers = stats.totalPlayers + #lobbyData.players
+		stats.totalPlayers = stats.totalPlayers + lobbyData.playerCount
 		
 		table.insert(stats.lobbyDetails, {
 			lobbyId = lobbyId,
-			playerCount = #lobbyData.players,
+			playerCount = lobbyData.playerCount,
 			maxPlayers = MAX_PLAYERS_PER_LOBBY,
 			players = lobbyData.players
 		})
