@@ -62,12 +62,19 @@ function ArenaSpawner:createGrassArena(playerId: number, playerName: string): Fo
 	local clonedArena = grassArenaModel:Clone()
 	clonedArena.Name = "Grass Arena"
 	
-	-- Position the arena for this player
-	-- You can adjust the positioning logic based on your needs
+	-- Position the arena for this player based on lobby ID
+	-- Each lobby gets a different position to avoid overlap
+	-- Use the lobby ID from the spawnPoints parent folder name
+	local lobbyFolder = self.spawnPoints.Parent
+	local lobbyId = 1 -- Default to lobby 1
+	if lobbyFolder and lobbyFolder.Name:find("Lobby_") then
+		lobbyId = tonumber(lobbyFolder.Name:match("Lobby_(%d+)")) or 1
+	end
+	
 	local arenaPosition = Vector3.new(
-		(playerId % 10) * 100, -- Spread players out horizontally
+		(lobbyId - 1) * 1000, -- Start first lobby at 0, subsequent lobbies at 1000, 2000, etc.
 		0, -- Ground level
-		math.floor(playerId / 10) * 100 -- Spread players out vertically
+		(playerId % 100) * 50 -- Spread players within lobby by 50 units
 	)
 	
 	-- Set the arena position

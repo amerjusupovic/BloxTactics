@@ -19,9 +19,11 @@ local function initializeGame()
 	-- RemoteEvents are automatically created when the module is required
 	
 	-- Initialize the Lobby Manager (this handles everything else)
+	print("Initializing Lobby Manager...")
 	LobbyManager.init()
 	
 	-- Initialize Board Detection system after lobby system is ready
+	print("Waiting for lobby system to initialize...")
 	wait(1) -- Give lobby system time to initialize
 	local BoardDetection = require(script.Parent.Server.BoardDetection)
 	BoardDetection.init()

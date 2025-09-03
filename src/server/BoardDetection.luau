@@ -14,24 +14,23 @@ local BoardDetection = {}
 local playerBoardAreas = {} -- {playerId = boardArea}
 
 -- Create board area for a player
-function BoardDetection.createBoardArea(playerId: number, playerName: string)
-	-- Find the player's arena in the current workspace
-	-- Since we're using the lobby system, the arena should be in the main workspace
-	local spawnPoints = workspace:FindFirstChild("SpawnPoints")
+function BoardDetection.createBoardArea(playerId: number, playerName: string, lobbyData: any)
+	-- Find the player's arena in the lobby's SpawnPoints
+	local spawnPoints = lobbyData and lobbyData.spawnPoints
 	if not spawnPoints then
-		warn("SpawnPoints not found in workspace - cannot create board area for " .. playerName)
+		warn("SpawnPoints not found in lobby for player " .. playerName)
 		return nil
 	end
 	
 	local playerFolder = spawnPoints:FindFirstChild(tostring(playerId))
 	if not playerFolder then
-		warn("Player folder not found for " .. playerName .. " in workspace")
+		warn("Player folder not found for " .. playerName .. " in lobby")
 		return nil
 	end
 	
 	local grassArena = playerFolder:FindFirstChild("Grass Arena")
 	if not grassArena then
-		warn("Grass Arena not found for player " .. playerName .. " in workspace")
+		warn("Grass Arena not found for player " .. playerName .. " in lobby")
 		return nil
 	end
 	
@@ -179,31 +178,17 @@ end
 
 -- Initialize board detection for all existing players
 function BoardDetection.init()
-	-- Create board areas for existing players
-	for _, player in pairs(Players:GetPlayers()) do
-		BoardDetection.createBoardArea(player.UserId, player.Name)
-	end
-	
-	-- Set up player joining/leaving handlers
-	Players.PlayerAdded:Connect(function(player)
-		-- Wait for the arena to be created by ArenaSpawner
-		wait(3)
-		BoardDetection.createBoardArea(player.UserId, player.Name)
-	end)
-	
-	Players.PlayerRemoving:Connect(function(player)
-		BoardDetection.removeBoardArea(player.UserId)
-	end)
-	
-	print("Board Detection system initialized")
+	-- Note: This function is called before the lobby system is fully set up
+	-- Individual player board detection will be initialized when they join lobbies
+	print("Board Detection system initialized - waiting for players to join lobbies")
 end
 
 -- Function to initialize board detection for a specific player (called after lobby setup)
-function BoardDetection.initializeForPlayer(playerId: number, playerName: string)
+function BoardDetection.initializeForPlayer(playerId: number, playerName: string, lobbyData: any)
 	-- Wait a bit for the arena to be fully created
 	spawn(function()
 		wait(1)
-		BoardDetection.createBoardArea(playerId, playerName)
+		BoardDetection.createBoardArea(playerId, playerName, lobbyData)
 	end)
 end
 

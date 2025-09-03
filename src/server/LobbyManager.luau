@@ -13,7 +13,6 @@ local LobbyManager = {}
 
 -- Lobby configuration
 local MAX_PLAYERS_PER_LOBBY = 8
-local LOBBY_SPACING = 1000 -- Distance between lobbies
 
 -- Lobby storage
 local lobbies = {} -- {lobbyId = lobbyData}
@@ -36,72 +35,21 @@ local LobbyData = {
 
 -- Function to create a new lobby workspace
 local function createLobbyWorkspace(lobbyId: number): Folder
-	local lobbyWorkspace = Instance.new("Folder")
-	lobbyWorkspace.Name = "Lobby_" .. lobbyId
-	
-	-- Clone the baseplate
-	local baseplate = Workspace:FindFirstChild("Baseplate")
-	if baseplate then
-		local success, clonedBaseplate = pcall(function()
-			return baseplate:Clone()
-		end)
-		if success and clonedBaseplate then
-			clonedBaseplate.Parent = lobbyWorkspace
-			print("Successfully cloned baseplate for lobby " .. lobbyId)
-		else
-			warn("Failed to clone baseplate for lobby " .. lobbyId)
-		end
-	end
-	
-	-- Note: Lighting and Terrain services cannot be cloned
-	-- They will use the global services instead
-	
-	-- Clone other important workspace objects
-	for _, child in pairs(Workspace:GetChildren()) do
-		if child.Name ~= "Baseplate" and 
-		   child.Name ~= "SpawnPoints" and 
-		   child.Name ~= "Players" and
-		   child.Name ~= "Camera" and
-		   child.Name ~= "Terrain" and
-		   child.Name ~= "Lighting" then
-			
-			local success, clonedChild = pcall(function()
-				return child:Clone()
-			end)
-			
-			if success and clonedChild then
-				clonedChild.Parent = lobbyWorkspace
-				print("Successfully cloned " .. child.Name .. " for lobby " .. lobbyId)
-			else
-				warn("Failed to clone " .. child.Name .. " for lobby " .. lobbyId)
-			end
-		end
-	end
+	-- Instead of creating a separate workspace, we'll create a folder in the main workspace
+	-- that contains the lobby's SpawnPoints, and position arenas at different locations
+	local lobbyFolder = Instance.new("Folder")
+	lobbyFolder.Name = "Lobby_" .. lobbyId
 	
 	-- Create SpawnPoints folder for this lobby
 	local spawnPoints = Instance.new("Folder")
 	spawnPoints.Name = "SpawnPoints"
-	spawnPoints.Parent = lobbyWorkspace
+	spawnPoints.Parent = lobbyFolder
 	
-	-- Position the lobby workspace by moving cloned objects
-	-- Calculate the offset for this lobby
-	local lobbyOffset = Vector3.new(
-		lobbyId * LOBBY_SPACING, -- X position (spread lobbies horizontally)
-		0, -- Y position (ground level)
-		0  -- Z position
-	)
+	-- Parent the lobby folder to the main workspace
+	lobbyFolder.Parent = workspace
 	
-	-- Move all cloned objects to the lobby position
-	for _, child in pairs(lobbyWorkspace:GetChildren()) do
-		if child:IsA("BasePart") then
-			child.Position = child.Position + lobbyOffset
-		elseif child:IsA("Model") then
-			child:PivotTo(CFrame.new(child:GetPivot().Position + lobbyOffset))
-		end
-	end
-	
-	print("Created lobby workspace " .. lobbyId .. " at position " .. tostring(lobbyOffset))
-	return lobbyWorkspace
+	print("Created lobby folder " .. lobbyId .. " in main workspace")
+	return lobbyFolder
 end
 
 -- Function to create a new lobby
@@ -299,26 +247,33 @@ function LobbyManager.addPlayerToLobby(playerId: number, player: Player): boolea
 	lobbyData.players[playerId] = player
 	playerLobbies[playerId] = lobbyId
 	
-	-- Move player to lobby workspace
-	local character = player.Character
-	if character then
-		character.Parent = lobbyData.workspace
-		
-		-- Position player at spawn point
-		local spawnPoint = lobbyData.workspace:FindFirstChild("SpawnPoint")
-		if spawnPoint then
-			character:PivotTo(spawnPoint.CFrame + Vector3.new(0, 5, 0))
-		end
-	end
-	
-	-- Initialize player in lobby
+	-- Initialize player in lobby (this creates the arena and player folder)
 	LobbyManager.initializePlayerInLobby(playerId, player, lobbyData)
+	
+	-- Position player at lobby location in main workspace (don't move character to lobby workspace)
+	spawn(function()
+		-- Wait for character to spawn
+		local character = player.Character or player.CharacterAdded:Wait()
+		
+		-- Keep character in main workspace, just position it at the lobby location
+		-- Use the same positioning logic as ArenaSpawner for consistency
+		local lobbyId = lobbyData.lobbyId
+		local playerOffset = (playerId % 100) * 50 -- Same as arena positioning (50 units between players)
+		local lobbyCenter = Vector3.new(
+			(lobbyId - 1) * 1000, -- Start first lobby at 0, subsequent lobbies at 1000, 2000, etc.
+			5, -- Slightly above ground
+			playerOffset -- Same Z offset as arena
+		)
+		character:PivotTo(CFrame.new(lobbyCenter))
+		
+		print("Positioned character for " .. player.Name .. " at lobby " .. lobbyId .. " location in main workspace: " .. tostring(lobbyCenter))
+	end)
 	
 	-- Initialize board detection for this player after arena is created
 	spawn(function()
-		wait(2) -- Wait for arena to be fully created
+		wait(3) -- Wait for arena to be fully created
 		local BoardDetection = require(script.Parent.BoardDetection)
-		BoardDetection.initializeForPlayer(playerId, player.Name)
+		BoardDetection.initializeForPlayer(playerId, player.Name, lobbyData)
 	end)
 	
 	print("Added player " .. player.Name .. " to lobby " .. lobbyId .. " (Total: " .. #lobbyData.players .. "/" .. MAX_PLAYERS_PER_LOBBY .. ")")
