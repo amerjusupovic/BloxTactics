@@ -254,6 +254,57 @@ function UITemplate.createTemplate()
 	sellLabel.Font = Enum.Font.GothamBold
 	sellLabel.Parent = sellUnitFrame
 	
+	-- Create challenge frame
+	local challengeFrame = Instance.new("Frame")
+	challengeFrame.Name = "ChallengeFrame"
+	challengeFrame.Size = UDim2.new(0, 300, 0, 100)
+	challengeFrame.Position = UDim2.new(0.5, -150, 0.7, 0)
+	challengeFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	challengeFrame.BorderSizePixel = 0
+	challengeFrame.Visible = false
+	challengeFrame.ZIndex = 10
+	challengeFrame.Parent = mainFrame
+	
+	-- Create challenge frame corner
+	local challengeCorner = Instance.new("UICorner")
+	challengeCorner.CornerRadius = UDim.new(0, 8)
+	challengeCorner.Parent = challengeFrame
+	
+	-- Create challenge frame border
+	local challengeBorder = Instance.new("UIStroke")
+	challengeBorder.Color = Color3.fromRGB(100, 100, 100)
+	challengeBorder.Thickness = 2
+	challengeBorder.Parent = challengeFrame
+	
+	-- Create challenge label
+	local challengeLabel = Instance.new("TextLabel")
+	challengeLabel.Name = "ChallengeLabel"
+	challengeLabel.Size = UDim2.new(1, 0, 0, 60)
+	challengeLabel.Position = UDim2.new(0, 0, 0, 0)
+	challengeLabel.BackgroundTransparency = 1
+	challengeLabel.Text = "Challenge Player?"
+	challengeLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	challengeLabel.TextScaled = true
+	challengeLabel.Font = Enum.Font.GothamBold
+	challengeLabel.Parent = challengeFrame
+	
+	-- Create challenge button
+	local challengeButton = Instance.new("TextButton")
+	challengeButton.Name = "ChallengeButton"
+	challengeButton.Size = UDim2.new(0.8, 0, 0, 30)
+	challengeButton.Position = UDim2.new(0.1, 0, 0, 65)
+	challengeButton.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
+	challengeButton.Text = "Challenge to Battle"
+	challengeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	challengeButton.TextScaled = true
+	challengeButton.Font = Enum.Font.GothamBold
+	challengeButton.Parent = challengeFrame
+	
+	-- Create challenge button corner
+	local challengeButtonCorner = Instance.new("UICorner")
+	challengeButtonCorner.CornerRadius = UDim.new(0, 6)
+	challengeButtonCorner.Parent = challengeButton
+	
 	return templateGui
 end
 
