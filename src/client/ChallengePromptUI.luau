@@ -17,17 +17,15 @@ local challengeLabel = nil
 local currentBoardOwnerId = nil
 local _currentBoardOwnerName = nil
 
--- Get the existing ChallengeFrame from BloxTacticsUITemplate
+-- Get the existing ChallengeFrame from ReplicatedStorage
 local function getChallengeFrame()
 	if challengeFrame then
 		return challengeFrame
 	end
 		
-	-- Wait for the UI template to be available
-	local uiTemplate = ReplicatedStorage:WaitForChild("BloxTacticsUITemplate")
-	
-	local mainFrame = uiTemplate:WaitForChild("MainFrame")
-	
+	-- Wait for the UI to be available in ReplicatedStorage
+	local existingUI = ReplicatedStorage:WaitForChild("BloxTacticsUITemplate")
+	local mainFrame = existingUI:WaitForChild("MainFrame")
 	local templateChallengeFrame = mainFrame:WaitForChild("ChallengeFrame")
 	
 	-- Clone the ChallengeFrame to the client's PlayerGui
@@ -49,14 +47,24 @@ local function getChallengeFrame()
 	-- Get the ChallengeLabel
 	challengeLabel = challengeFrame:WaitForChild("ChallengeLabel")
 	
-	-- Get the ChallengeButton and set up click handler
-	local challengeButton = challengeFrame:FindFirstChild("ChallengeButton")
-	if challengeButton then
-		challengeButton.MouseButton1Click:Connect(function()
+	-- Get the YesButton and set up click handler
+	local yesButton = challengeFrame:FindFirstChild("YesButton")
+	if yesButton then
+		yesButton.MouseButton1Click:Connect(function()
 			ChallengePromptUI.challengeBoardOwner()
 		end)
 	else
-		print("DEBUG: challengeButton not found!")
+		print("DEBUG: YesButton not found!")
+	end
+	
+	-- Get the NoButton and set up click handler
+	local noButton = challengeFrame:FindFirstChild("NoButton")
+	if noButton then
+		noButton.MouseButton1Click:Connect(function()
+			ChallengePromptUI.hideChallengePrompt()
+		end)
+	else
+		print("DEBUG: NoButton not found!")
 	end
 	
 	-- Hide initially
@@ -106,13 +114,18 @@ end
 -- Challenge the board owner
 function ChallengePromptUI.challengeBoardOwner()
 	if not currentBoardOwnerId then
+		print("DEBUG: No current board owner ID to challenge")
 		return
 	end
+	
+	print("DEBUG: Challenging board owner:", currentBoardOwnerId, "Name:", _currentBoardOwnerName)
 	
 	-- Send challenge event to server
 	local remoteEventsFolder = ReplicatedStorage:WaitForChild("RemoteEvents")
 	local challengePlayerEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.CHALLENGE_PLAYER)
 	challengePlayerEvent:FireServer(currentBoardOwnerId)
+	
+	print("DEBUG: Challenge event sent to server for player ID:", currentBoardOwnerId)
 	
 	-- Hide the prompt
 	ChallengePromptUI.hideChallengePrompt()

@@ -86,12 +86,19 @@ function PVPChallengeManager.createChallenge(challengerId: number, challengedId:
 		local challengerPlayer = Players:GetPlayerByUserId(challengerId)
 		local challengerName = challengerPlayer and challengerPlayer.Name or "Unknown Player"
 		
+		print("Sending challenge notification to player:", challengedPlayer.Name)
+		print("Challenger:", challengerName, "ID:", challengerId)
+		
 		local challengeEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
 		challengeEvent:FireClient(challengedPlayer, challengerName .. " has challenged you to a battle!", 10)
 		
 		-- Send challenge request UI
 		local challengeRequestEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_CHALLENGE_REQUEST)
+		print("Firing ShowChallengeRequest event to player:", challengedPlayer.Name)
 		challengeRequestEvent:FireClient(challengedPlayer, challengerId, challengerName)
+		print("ShowChallengeRequest event fired successfully")
+	else
+		warn("Challenged player not found for ID:", challengedId)
 	end
 	
 	print("Challenge created: " .. challengeId .. " from " .. challengerId .. " to " .. challengedId)

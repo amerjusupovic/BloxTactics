@@ -198,14 +198,14 @@ function LobbyManager.setupRemoteEventHandlers()
 	
 	-- Handle PVP challenge responses
 	local acceptChallengeEvent = remoteEventsFolder:WaitForChild("AcceptChallenge")
-	acceptChallengeEvent.OnServerEvent:Connect(function(player)
-		print("Player " .. player.Name .. " accepting challenge")
+	acceptChallengeEvent.OnServerEvent:Connect(function(player, challengerId)
+		print("Player " .. player.Name .. " accepting challenge from " .. challengerId)
 		PVPChallengeManager.acceptChallenge(player.UserId)
 	end)
 	
 	local rejectChallengeEvent = remoteEventsFolder:WaitForChild("RejectChallenge")
-	rejectChallengeEvent.OnServerEvent:Connect(function(player)
-		print("Player " .. player.Name .. " rejecting challenge")
+	rejectChallengeEvent.OnServerEvent:Connect(function(player, challengerId)
+		print("Player " .. player.Name .. " rejecting challenge from " .. challengerId)
 		PVPChallengeManager.rejectChallenge(player.UserId)
 	end)
 	

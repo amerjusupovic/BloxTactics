@@ -4,14 +4,11 @@
 ]]
 
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local Constants = require(game.ReplicatedStorage.Shared.Constants)
 local DataStructures = require(game.ReplicatedStorage.Shared.DataStructures)
 local GameUtils = require(game.ReplicatedStorage.Shared.GameUtils)
-local UITemplate = require(game.ReplicatedStorage.Shared.UITemplate)
-local PlayerData = DataStructures.PlayerData
 
 local UI = {}
 
@@ -39,24 +36,26 @@ local selectedHex = nil
 function UI.createMainUI()
 	print("UI.createMainUI() called")
 	
-	-- Create main GUI from template
-	print("Cloning UI template...")
-	mainGui = UITemplate.cloneTemplate()
-	if not mainGui then
-		warn("Failed to clone UI template!")
+	-- Get existing UI from ReplicatedStorage
+	print("Looking for existing UI in ReplicatedStorage...")
+	local existingUI = game.ReplicatedStorage:FindFirstChild("BloxTacticsUITemplate")
+	if not existingUI then
+		warn("BloxTacticsUITemplate not found in ReplicatedStorage!")
 		return
 	end
 	
-	print("UI template cloned successfully")
-	mainGui.Name = "BloxTacticsUI"
+	-- Clone the existing UI
+	print("Cloning existing UI...")
+	mainGui = existingUI:Clone()
+	mainGui.Name = "BloxTacticsUITemplate"
 	mainGui.Parent = playerGui
-	print("Main GUI parented to PlayerGui")
+	print("Main GUI cloned and parented to PlayerGui")
 	
 	-- Get references to UI elements
 	print("Looking for MainFrame...")
 	local mainFrame = mainGui:FindFirstChild("MainFrame")
 	if not mainFrame then
-		warn("MainFrame not found in UI template!")
+		warn("MainFrame not found in UI!")
 		return
 	end
 	print("MainFrame found successfully")
@@ -77,43 +76,10 @@ function UI.createMainUI()
 	
 	-- Verify all frames exist
 	if not shopFrame or not boardFrame or not benchFrame or not statsFrame or not sellUnitFrame then
-		warn("One or more UI frames not found in template!")
+		warn("One or more UI frames not found in UI!")
 		return
 	end
 	print("All UI frames found successfully!")
-
-	local shopTitle = nil
-	local boardTitle = nil
-	local benchTitle = nil
-	local statsTitle = nil
-	local statsLevelLabel = nil
-	local statsExpLabel = nil
-	local statsGoldLabel = nil
-	local statsStreakLabel = nil
-
-	shopTitle = shopFrame:FindFirstChild("ShopTitle")
-	shopTitle.Font = Enum.Font.GothamBold
-
-	boardTitle = boardFrame:FindFirstChild("BoardTitle")
-	boardTitle.Font = Enum.Font.GothamBold
-
-	benchTitle = benchFrame:FindFirstChild("BenchTitle")
-	benchTitle.Font = Enum.Font.GothamBold
-
-	statsTitle = statsFrame:FindFirstChild("StatsTitle")
-	statsTitle.Font = Enum.Font.GothamBold
-
-	statsLevelLabel = statsFrame:FindFirstChild("LevelLabel")
-	statsLevelLabel.Font = Enum.Font.Gotham
-
-	statsExpLabel = statsFrame:FindFirstChild("ExpLabel")
-	statsExpLabel.Font = Enum.Font.Gotham
-
-	statsGoldLabel = statsFrame:FindFirstChild("GoldLabel")
-	statsGoldLabel.Font = Enum.Font.Gotham
-
-	statsStreakLabel = statsFrame:FindFirstChild("StreakLabel")
-	statsStreakLabel.Font = Enum.Font.Gotham
 	
 	-- Create board hexes
 	UI.createBoardHexes()
@@ -141,18 +107,11 @@ function UI.createMainUI()
 		end)
 	end
 	
-	print("UI created successfully from template!")
-	print("UI state summary:")
-	print("  mainGui:", mainGui and "YES" or "NO")
-	print("  shopFrame:", shopFrame and "YES" or "NO")
-	print("  boardFrame:", boardFrame and "YES" or "NO")
-	print("  benchFrame:", benchFrame and "YES" or "NO")
-	print("  statsFrame:", statsFrame and "YES" or "NO")
-	print("  sellUnitFrame:", sellUnitFrame and "YES" or "NO")
+	print("UI created successfully from existing ReplicatedStorage elements!")
 end
 
 -- Function to update player stats display
-function UI.updatePlayerStats(playerData: PlayerData)
+function UI.updatePlayerStats(playerData: DataStructures.PlayerData)
 	print("=== UI.updatePlayerStats START ===")
 	print("Player data received:", playerData)
 	
@@ -300,7 +259,7 @@ function UI.updateShopDisplay(shopUnits: {DataStructures.Unit})
 		end)
 		
 		button.Name = "ShopUnit_" .. i
-		button.Position = UDim2.new(0.05 + (i-1) * 0.19, 0, 0.15, 0)
+		button.Position = UDim2.new(0.03 + (i-1) * 0.19, 0, 0.15, 0)
 	end
 end
 
@@ -773,10 +732,10 @@ function UI.moveUnit(unitVisual: GuiObject, fromHex: GuiObject, toHex: GuiObject
 	end
 	
 	-- Check if there's a unit in the destination hex
-	local targetUnitVisual = nil
+	local _targetUnitVisual = nil
 	for _, child in pairs(toHex:GetChildren()) do
 		if child:IsA("ImageButton") and child ~= toHex then
-			targetUnitVisual = child
+			_targetUnitVisual = child
 			break
 		end
 	end
@@ -961,7 +920,7 @@ function UI.createBoardHexes()
 	if not benchFrame then return end
 	
 	-- Grid size (bench is 1 row, 6 columns)
-	local benchRows = 1
+	local _benchRows = 1
 	local benchCols = Constants.BENCH_CAPACITY -- e.g. 6
 	
 	-- Hex size (as scale of parent container)

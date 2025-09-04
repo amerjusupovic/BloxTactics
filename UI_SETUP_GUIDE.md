@@ -1,20 +1,12 @@
-# UI Setup Guide for Studio Editing
+# UI Setup Guide
 
-## Method 1: Create UI Template in ReplicatedStorage (Recommended)
+## Current UI System
 
-### Step 1: Create the Template in Studio
+The BloxTactics UI system now uses existing UI elements from ReplicatedStorage. The UITemplate system has been removed, and the code directly references UI elements that should already exist in ReplicatedStorage.
 
-1. **Open Roblox Studio** and your BloxTactics project
-2. **Navigate to ReplicatedStorage** in the Explorer
-3. **Create a new ScreenGui**:
-   - Right-click on ReplicatedStorage
-   - Insert → ScreenGui
-   - Name it `BloxTacticsUITemplate`
-   - Set `ResetOnSpawn` to `false`
+## Required UI Structure in ReplicatedStorage
 
-### Step 2: Build the UI Structure
-
-Create the following hierarchy in the ScreenGui:
+You need to create a ScreenGui named `BloxTacticsUITemplate` in ReplicatedStorage with the following structure:
 
 ```
 BloxTacticsUITemplate (ScreenGui)
@@ -31,6 +23,17 @@ BloxTacticsUITemplate (ScreenGui)
     │   ├── LevelLabel (TextLabel)
     │   ├── ExpLabel (TextLabel)
     │   └── StreakLabel (TextLabel)
+    ├── ChallengeFrame (Frame) - For challenge prompts
+    │   ├── ChallengeLabel (TextLabel)
+    │   ├── YesButton (TextButton)
+    │   └── NoButton (TextButton)
+    ├── IncomingChallengeFrame (Frame) - For incoming challenges
+    │   └── IncomingChallengePrompt (Frame)
+    │       ├── IncomingChallengeLabel (TextLabel)
+    │       ├── YesButton (TextButton)
+    │       └── NoButton (TextButton)
+    ├── SellUnitFrame (Frame) - For selling units
+    │   └── SellLabel (TextLabel)
     └── KeybindContainer (Frame)
         ├── FKeyIndicator (Frame)
         │   ├── FKeyLabel (TextLabel)
@@ -40,88 +43,48 @@ BloxTacticsUITemplate (ScreenGui)
             └── CKeyDesc (TextLabel)
 ```
 
-### Step 3: Configure Each Element
+## How to Set Up UI
 
-#### MainFrame
-- **Size**: 1, 0, 1, 0 (Full screen)
-- **BackgroundTransparency**: 1
-- **Position**: 0, 0, 0, 0
+### Step 1: Create the UI in Studio
+1. **Open Roblox Studio** and your BloxTactics project
+2. **Navigate to ReplicatedStorage** in the Explorer
+3. **Create a new ScreenGui**:
+   - Right-click on ReplicatedStorage
+   - Insert → ScreenGui
+   - Name it `BloxTacticsUITemplate`
+   - Set `ResetOnSpawn` to `false`
 
-#### ShopFrame
-- **Size**: 0.3, 0, 0.4, 0
-- **Position**: 0.7, 0, 0.1, 0
-- **BackgroundColor**: Dark gray (40, 40, 40)
-- **Visible**: false (initially hidden)
+### Step 2: Build the UI Structure
+Create the hierarchy shown above with all the required frames and labels.
 
-#### BoardFrame
-- **Size**: 0.6, 0, 0.6, 0
-- **Position**: 0.05, 0, 0.2, 0
-- **BackgroundColor**: Dark gray (30, 30, 30)
-- **Visible**: false (initially hidden)
+### Step 3: Configure Properties
+Set appropriate sizes, positions, colors, and other properties for each element.
 
-#### BenchFrame
-- **Size**: 0.6, 0, 0.15, 0
-- **Position**: 0.05, 0, 0.85, 0
-- **BackgroundColor**: Dark gray (35, 35, 35)
-- **Visible**: false (initially hidden)
+## How the Code Works
 
-#### StatsFrame
-- **Size**: 0.25, 0, 0.3, 0
-- **Position**: 0.05, 0, 0.05, 0
-- **BackgroundColor**: Dark gray (40, 40, 40)
-- **Visible**: true (always visible)
+- **UI.luau**: Looks for `BloxTacticsUITemplate` in ReplicatedStorage and clones it to the player's PlayerGui
+- **ChallengePromptUI.luau**: Uses the `ChallengeFrame` from the cloned UI
+- **IncomingChallengeUI.luau**: Uses the `IncomingChallengeFrame` and `IncomingChallengePrompt` from the cloned UI
 
-#### KeybindContainer
-- **Size**: 0.2, 0, 0.15, 0
-- **Position**: 0.8, 0, 0.85, 0
-- **BackgroundTransparency**: 1
+## Key UI Functions
 
-### Step 4: Update the Code
-
-The code is already set up to use the template! The `UITemplate.luau` module will create the template programmatically, but you can also:
-
-1. **Create the template manually** in Studio (as described above)
-2. **Update the UI module** to load from the existing template instead of creating it
-
-### Method 2: Load from Existing Template
-
-If you want to create the template manually in Studio and load it, update the `UITemplate.luau`:
-
-```lua
--- Function to load existing template from ReplicatedStorage
-function UITemplate.loadExistingTemplate()
-    local existingTemplate = ReplicatedStorage:FindFirstChild("BloxTacticsUITemplate")
-    if existingTemplate then
-        return existingTemplate:Clone()
-    else
-        warn("UI Template not found in ReplicatedStorage! Creating from code...")
-        return UITemplate.createTemplate()
-    end
-end
-```
-
-Then update the UI module to use `loadExistingTemplate()` instead of `createTemplate()`.
+- `UI.createMainUI()`: Clones the UI from ReplicatedStorage to PlayerGui
+- `UI.toggleShop()`: Shows/hides the shop (F key)
+- `UI.toggleBoard()`: Shows/hides board and bench (C key)
+- `UI.updatePlayerStats()`: Updates player statistics display
 
 ## Benefits of This Approach
 
-1. **Visual Editing**: Edit UI positions, sizes, and properties directly in Studio
-2. **Real-time Preview**: See changes immediately in Studio
-3. **Version Control**: Template is part of your project structure
-4. **Flexibility**: Easy to modify without touching code
-5. **Consistency**: All players get the same UI layout
-
-## Tips for Studio Editing
-
-1. **Use the Properties panel** to adjust positions and sizes
-2. **Use the Explorer** to organize the hierarchy
-3. **Test different screen sizes** using the Viewport
-4. **Use Anchors** for responsive design
-5. **Keep element names consistent** with the code expectations
+1. **Visual Editing**: Edit UI directly in Studio
+2. **No Code Dependencies**: UI structure is separate from code logic
+3. **Easy Modifications**: Change UI without touching code
+4. **Consistent Behavior**: All players get the same UI from ReplicatedStorage
 
 ## Troubleshooting
 
-- **"Template not found"**: Make sure the ScreenGui is in ReplicatedStorage
-- **"Frames not found"**: Check that all required frames exist with correct names
-- **UI not appearing**: Verify the template is properly cloned and parented
+- **"BloxTacticsUITemplate not found"**: Make sure the ScreenGui exists in ReplicatedStorage
+- **"MainFrame not found"**: Check that MainFrame exists as a child of BloxTacticsUITemplate
+- **"Frames not found"**: Verify all required frames exist with correct names
+- **UI not appearing**: Check that the UI is properly cloned and parented
 
-This approach gives you the best of both worlds - visual editing in Studio and programmatic control from your code!
+The system now uses existing UI elements from ReplicatedStorage without any template system!
