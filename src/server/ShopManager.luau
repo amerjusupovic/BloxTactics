@@ -28,12 +28,30 @@ function ShopManager.initializePlayerShop(userId: number)
 	local playerData = PlayerDataManager.getPlayerData(userId)
 	if not playerData then return end
 	
-	-- Generate initial shop
-	local shopUnits = Shop.generateShop(playerData.level)
-	playerShops[userId] = {
-		units = shopUnits,
-		lastRefresh = os.time()
-	}
+	-- Check if player already has a shop state in their data
+	if playerData.shopState and playerData.shopState.units and #playerData.shopState.units > 0 then
+		-- Use existing shop state
+		playerShops[userId] = {
+			units = playerData.shopState.units,
+			lastRefresh = playerData.shopState.lastRefresh
+		}
+		print("Restored existing shop for player " .. userId .. " with " .. #playerData.shopState.units .. " units")
+	else
+		-- Generate new shop
+		local shopUnits = Shop.generateShop(playerData.level)
+		playerShops[userId] = {
+			units = shopUnits,
+			lastRefresh = os.time()
+		}
+		
+		-- Save shop state to player data
+		playerData.shopState = {
+			units = shopUnits,
+			lastRefresh = os.time()
+		}
+		PlayerDataManager.savePlayerData(userId)
+		print("Generated new shop for player " .. userId)
+	end
 	
 	-- Send shop to client
 	ShopManager.sendShopToClient(userId)
@@ -141,6 +159,15 @@ function ShopManager.handleUnitPurchase(userId: number, shopIndex: number)
 			-- Mark unit as sold out instead of removing it
 			unit.soldOut = true
 			
+			-- Update shop state in player data
+			local currentPlayerData = PlayerDataManager.getPlayerData(userId)
+			if currentPlayerData then
+				currentPlayerData.shopState = {
+					units = shopData.units,
+					lastRefresh = shopData.lastRefresh
+				}
+			end
+			
 			-- Check for automatic combinations after placement
 			ShopManager.checkAndPerformAutomaticCombinations(userId)
 			
@@ -173,6 +200,15 @@ function ShopManager.handleUnitPurchase(userId: number, shopIndex: number)
 			
 			-- Mark unit as sold out instead of removing it
 			unit.soldOut = true
+			
+			-- Update shop state in player data
+			local currentPlayerData = PlayerDataManager.getPlayerData(userId)
+			if currentPlayerData then
+				currentPlayerData.shopState = {
+					units = shopData.units,
+					lastRefresh = shopData.lastRefresh
+				}
+			end
 			
 			-- Check for automatic combinations after placement
 			ShopManager.checkAndPerformAutomaticCombinations(userId)
@@ -338,6 +374,12 @@ function ShopManager.refreshShop(userId: number)
 	-- Generate new shop
 	local shopUnits = Shop.generateShop(playerData.level)
 	playerShops[userId] = {
+		units = shopUnits,
+		lastRefresh = os.time()
+	}
+	
+	-- Update shop state in player data
+	playerData.shopState = {
 		units = shopUnits,
 		lastRefresh = os.time()
 	}

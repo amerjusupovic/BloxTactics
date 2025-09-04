@@ -9,9 +9,10 @@ local Players = game:GetService("Players")
 local DataStructures = require(game.ReplicatedStorage.Shared.DataStructures)
 local Constants = require(game.ReplicatedStorage.Shared.Constants)
 local GameUtils = require(game.ReplicatedStorage.Shared.GameUtils)
-local PlayerData = DataStructures.PlayerData
-local BoardState = DataStructures.BoardState
-local BenchState = DataStructures.BenchState
+type PlayerData = DataStructures.PlayerData
+type BoardState = DataStructures.BoardState
+type BenchState = DataStructures.BenchState
+type ShopState = DataStructures.ShopState
 
 local PlayerDataManager = {}
 
@@ -106,6 +107,26 @@ function PlayerDataManager.serializePlayerData(playerData: PlayerData): {[string
 		lastUpdated = playerData.lastUpdated
 	}
 	
+	-- Serialize shop state if it exists
+	if playerData.shopState then
+		serialized.shopState = {
+			units = {},
+			lastRefresh = playerData.shopState.lastRefresh
+		}
+		for i, unit in ipairs(playerData.shopState.units) do
+			serialized.shopState.units[i] = {
+				id = unit.id,
+				name = unit.name,
+				cost = unit.cost,
+				tier = unit.tier,
+				imageAssetId = unit.imageAssetId,
+				stats = unit.stats,
+				abilities = unit.abilities,
+				soldOut = unit.soldOut
+			}
+		end
+	end
+	
 	-- Serialize board state
 	serialized.boardState = {
 		grid = {},
@@ -158,6 +179,26 @@ function PlayerDataManager.deserializePlayerData(serialized: {[string]: any}): P
 		streak = serialized.streak,
 		lastUpdated = serialized.lastUpdated
 	}
+	
+	-- Deserialize shop state if it exists
+	if serialized.shopState then
+		playerData.shopState = {
+			units = {},
+			lastRefresh = serialized.shopState.lastRefresh
+		}
+		for i, unitData in ipairs(serialized.shopState.units) do
+			playerData.shopState.units[i] = {
+				id = unitData.id,
+				name = unitData.name,
+				cost = unitData.cost,
+				tier = unitData.tier,
+				imageAssetId = unitData.imageAssetId,
+				stats = unitData.stats,
+				abilities = unitData.abilities,
+				soldOut = unitData.soldOut
+			}
+		end
+	end
 	
 	-- Deserialize board state
 	playerData.boardState = {

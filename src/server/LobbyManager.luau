@@ -332,6 +332,23 @@ function LobbyManager.initializePlayerInLobby(playerId: number, player: Player, 
 	local updatePlayerDataEvent = game.ReplicatedStorage.RemoteEvents:WaitForChild("UpdatePlayerData")
 	updatePlayerDataEvent:FireClient(player, playerData)
 	
+	-- Send board and bench updates to client
+	local updateBoardEvent = game.ReplicatedStorage.RemoteEvents:WaitForChild("UpdateBoard")
+	local updateBenchEvent = game.ReplicatedStorage.RemoteEvents:WaitForChild("UpdateBench")
+	if updateBoardEvent then
+		updateBoardEvent:FireClient(player, playerData.boardState)
+	end
+	if updateBenchEvent then
+		updateBenchEvent:FireClient(player, playerData.benchState)
+	end
+	
+	-- Spawn existing units on the physical board/bench
+	spawn(function()
+		wait(2) -- Wait for arena to be fully created
+		local UnitSpawner = require(script.Parent.UnitSpawner)
+		UnitSpawner.spawnExistingUnits(playerId, playerData)
+	end)
+	
 	print("Created arena for player " .. player.Name .. " in lobby " .. lobbyData.lobbyId)
 end
 

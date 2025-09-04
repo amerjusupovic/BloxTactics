@@ -16,6 +16,7 @@ export type PlayerData = {
 	items: {[string]: Item},
 	boardState: BoardState,
 	benchState: BenchState,
+	shopState: ShopState?,
 	streak: number, -- win/loss streak
 	lastUpdated: number
 }
@@ -82,6 +83,12 @@ export type BenchState = {
 export type ShopData = {
 	units: {Unit},
 	refreshCost: number,
+	lastRefresh: number
+}
+
+-- Shop state (for persistence)
+export type ShopState = {
+	units: {Unit},
 	lastRefresh: number
 }
 

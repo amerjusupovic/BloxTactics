@@ -462,6 +462,48 @@ function UnitSpawner.clearPlayerUnits(userId: number)
 	print("=== UnitSpawner.clearPlayerUnits SUCCESS ===")
 end
 
+-- Function to spawn all existing units for a player (used when player rejoins)
+function UnitSpawner.spawnExistingUnits(userId: number, playerData: any)
+	print("=== UnitSpawner.spawnExistingUnits START ===")
+	print("Parameters - UserId:", userId)
+	
+	if not playerData then
+		warn("No player data provided for spawning existing units")
+		return
+	end
+	
+	local spawnedCount = 0
+	
+	-- Spawn units from board state
+	if playerData.boardState and playerData.boardState.grid then
+		for position, unit in pairs(playerData.boardState.grid) do
+			if position and unit then
+				print("Spawning existing board unit:", unit.name, "at position:", position)
+				local success = UnitSpawner.spawnUnitOnBoard(userId, unit, position)
+				if success then
+					spawnedCount = spawnedCount + 1
+				end
+			end
+		end
+	end
+	
+	-- Spawn units from bench state
+	if playerData.benchState and playerData.benchState.units then
+		for unitId, unit in pairs(playerData.benchState.units) do
+			if unit and unit.slot then
+				print("Spawning existing bench unit:", unit.name, "at slot:", unit.slot)
+				local success = UnitSpawner.spawnUnitOnBench(userId, unit, unit.slot)
+				if success then
+					spawnedCount = spawnedCount + 1
+				end
+			end
+		end
+	end
+	
+	print("Spawned " .. spawnedCount .. " existing units for player " .. userId)
+	print("=== UnitSpawner.spawnExistingUnits SUCCESS ===")
+end
+
 -- Initialize unit models when the module loads
 UnitSpawner.loadUnitModels()
 
