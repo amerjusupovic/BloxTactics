@@ -204,28 +204,28 @@ end
 
 -- Accept a challenge
 function IncomingChallengeUI.acceptChallenge(challengerId: number)
-	-- Send accept event to server
+	-- Send accept event to server with local player's ID (the challenged player)
 	local remoteEventsFolder = ReplicatedStorage:WaitForChild("RemoteEvents")
 	local acceptChallengeEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.ACCEPT_CHALLENGE)
-	acceptChallengeEvent:FireServer(challengerId)
+	acceptChallengeEvent:FireServer(_Players.LocalPlayer.UserId)
 	
 	-- Remove the notification
 	IncomingChallengeUI.removeNotification(challengerId)
 	
-	print("Accepted challenge from:", challengerId)
+	print("Accepted challenge from:", challengerId, "Local player ID:", _Players.LocalPlayer.UserId)
 end
 
 -- Reject a challenge
 function IncomingChallengeUI.rejectChallenge(challengerId: number)
-	-- Send reject event to server
+	-- Send reject event to server with local player's ID (the challenged player)
 	local remoteEventsFolder = ReplicatedStorage:WaitForChild("RemoteEvents")
 	local rejectChallengeEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.REJECT_CHALLENGE)
-	rejectChallengeEvent:FireServer(challengerId)
+	rejectChallengeEvent:FireServer(_Players.LocalPlayer.UserId)
 	
 	-- Remove the notification
 	IncomingChallengeUI.removeNotification(challengerId)
 	
-	print("Rejected challenge from:", challengerId)
+	print("Rejected challenge from:", challengerId, "Local player ID:", _Players.LocalPlayer.UserId)
 end
 
 -- Clear all notifications

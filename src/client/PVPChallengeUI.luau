@@ -5,291 +5,502 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
+local _TweenService = game:GetService("TweenService")
+local _UserInputService = game:GetService("UserInputService")
 
 -- Load shared modules
 local Constants = require(game.ReplicatedStorage.Shared.Constants)
+local DataStructures = require(game.ReplicatedStorage.Shared.DataStructures)
 
 local PVPChallengeUI = {}
 
 -- UI elements
-local challengeRequestFrame = nil
-local battlePreparationFrame = nil
+local pvpBoardFrame = nil
+local pvpBenchFrame = nil
+local pvpCountdownLabel = nil
 local currentChallengeId = nil
-local preparationTimer = nil
+local countdownTimer = nil
 
--- Create challenge request UI
-function PVPChallengeUI.createChallengeRequestUI()
-	if challengeRequestFrame then
-		challengeRequestFrame:Destroy()
+-- PVP state storage
+local currentPVPBoardState = nil
+local currentPVPBenchState = nil
+
+-- ScreenGui containers
+local pvpFramesScreenGui = nil
+
+
+-- Create PVP board and bench frames
+function PVPChallengeUI.createPVPFrames()
+	if pvpBoardFrame then
+		pvpBoardFrame:Destroy()
+	end
+	if pvpBenchFrame then
+		pvpBenchFrame:Destroy()
+	end
+	if pvpFramesScreenGui then
+		pvpFramesScreenGui:Destroy()
 	end
 	
-	-- Create main frame
-	challengeRequestFrame = Instance.new("Frame")
-	challengeRequestFrame.Name = "ChallengeRequestFrame"
-	challengeRequestFrame.Size = UDim2.new(0, 400, 0, 200)
-	challengeRequestFrame.Position = UDim2.new(0.5, -200, 0.5, -100)
-	challengeRequestFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-	challengeRequestFrame.BorderSizePixel = 0
-	challengeRequestFrame.ZIndex = 10
+	print("DEBUG: Creating PVP frames...")
 	
-	-- Create corner radius
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 10)
-	corner.Parent = challengeRequestFrame
+	-- Get the existing UI from ReplicatedStorage
+	local existingUI = ReplicatedStorage:FindFirstChild("BloxTacticsUITemplate")
+	if not existingUI then
+		warn("DEBUG: BloxTacticsUITemplate not found in ReplicatedStorage!")
+		return
+	end
 	
-	-- Create title
-	local titleLabel = Instance.new("TextLabel")
-	titleLabel.Name = "TitleLabel"
-	titleLabel.Size = UDim2.new(1, 0, 0, 50)
-	titleLabel.Position = UDim2.new(0, 0, 0, 0)
-	titleLabel.BackgroundTransparency = 1
-	titleLabel.Text = "PVP Challenge Request"
-	titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	titleLabel.TextScaled = true
-	titleLabel.Font = Enum.Font.GothamBold
-	titleLabel.Parent = challengeRequestFrame
+	local mainFrame = existingUI:FindFirstChild("MainFrame")
+	if not mainFrame then
+		warn("DEBUG: MainFrame not found in UI!")
+		return
+	end
 	
-	-- Create challenger name label
-	local challengerLabel = Instance.new("TextLabel")
-	challengerLabel.Name = "ChallengerLabel"
-	challengerLabel.Size = UDim2.new(1, 0, 0, 30)
-	challengerLabel.Position = UDim2.new(0, 0, 0, 60)
-	challengerLabel.BackgroundTransparency = 1
-	challengerLabel.Text = "Unknown Player wants to challenge you!"
-	challengerLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-	challengerLabel.TextScaled = true
-	challengerLabel.Font = Enum.Font.Gotham
-	challengerLabel.Parent = challengeRequestFrame
+	-- Clone PVPBoardFrame and PVPBenchFrame
+	local templatePVPBoardFrame = mainFrame:FindFirstChild("PVPBoardFrame")
+	local templatePVPBenchFrame = mainFrame:FindFirstChild("PVPBenchFrame")
 	
-	-- Create accept button
-	local acceptButton = Instance.new("TextButton")
-	acceptButton.Name = "AcceptButton"
-	acceptButton.Size = UDim2.new(0.4, 0, 0, 40)
-	acceptButton.Position = UDim2.new(0.1, 0, 0, 120)
-	acceptButton.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-	acceptButton.Text = "Accept"
-	acceptButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	acceptButton.TextScaled = true
-	acceptButton.Font = Enum.Font.GothamBold
-	acceptButton.Parent = challengeRequestFrame
+	if not templatePVPBoardFrame or not templatePVPBenchFrame then
+		warn("DEBUG: PVPBoardFrame or PVPBenchFrame not found in MainFrame!")
+		print("DEBUG: Available frames in MainFrame:")
+		for _, child in pairs(mainFrame:GetChildren()) do
+			print("  - " .. child.Name)
+		end
+		return
+	end
 	
-	-- Create accept button corner
-	local acceptCorner = Instance.new("UICorner")
-	acceptCorner.CornerRadius = UDim.new(0, 8)
-	acceptCorner.Parent = acceptButton
-	
-	-- Create reject button
-	local rejectButton = Instance.new("TextButton")
-	rejectButton.Name = "RejectButton"
-	rejectButton.Size = UDim2.new(0.4, 0, 0, 40)
-	rejectButton.Position = UDim2.new(0.5, 0, 0, 120)
-	rejectButton.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-	rejectButton.Text = "Reject"
-	rejectButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	rejectButton.TextScaled = true
-	rejectButton.Font = Enum.Font.GothamBold
-	rejectButton.Parent = challengeRequestFrame
-	
-	-- Create reject button corner
-	local rejectCorner = Instance.new("UICorner")
-	rejectCorner.CornerRadius = UDim.new(0, 8)
-	rejectCorner.Parent = rejectButton
-	
-	-- Set up button events
-	acceptButton.MouseButton1Click:Connect(function()
-		PVPChallengeUI.acceptChallenge()
-	end)
-	
-	rejectButton.MouseButton1Click:Connect(function()
-		PVPChallengeUI.rejectChallenge()
-	end)
-	
-	-- Add to PlayerGui
+	-- Create ScreenGui container
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
-	challengeRequestFrame.Parent = playerGui
+	pvpFramesScreenGui = Instance.new("ScreenGui")
+	pvpFramesScreenGui.Name = "PVPFramesScreenGui"
+	pvpFramesScreenGui.Parent = playerGui
+	
+	-- Clone the frames
+	pvpBoardFrame = templatePVPBoardFrame:Clone()
+	pvpBenchFrame = templatePVPBenchFrame:Clone()
+	
+	-- Parent frames to ScreenGui
+	pvpBoardFrame.Parent = pvpFramesScreenGui
+	pvpBenchFrame.Parent = pvpFramesScreenGui
+	
+	-- Get the countdown label
+	pvpCountdownLabel = pvpBoardFrame:FindFirstChild("PVPCountdownLabel")
+	if pvpCountdownLabel then
+		print("DEBUG: Found PVPCountdownLabel")
+	else
+		warn("DEBUG: PVPCountdownLabel not found in PVPBoardFrame!")
+	end
 	
 	-- Hide initially
-	challengeRequestFrame.Visible = false
+	pvpBoardFrame.Visible = false
+	pvpBenchFrame.Visible = false
 	
-	return challengeRequestFrame
+	-- Create board hexes for PVP frames
+	PVPChallengeUI.createPVPBoardHexes()
+	PVPChallengeUI.createPVPBenchHexes()
+	
+	print("DEBUG: PVP frames created successfully with ScreenGui")
+	return pvpBoardFrame, pvpBenchFrame
 end
 
--- Create battle preparation UI
-function PVPChallengeUI.createBattlePreparationUI()
-	if battlePreparationFrame then
-		battlePreparationFrame:Destroy()
-	end
+-- Create PVP board hexes
+function PVPChallengeUI.createPVPBoardHexes()
+	if not pvpBoardFrame then return end
 	
-	-- Create main frame
-	battlePreparationFrame = Instance.new("Frame")
-	battlePreparationFrame.Name = "BattlePreparationFrame"
-	battlePreparationFrame.Size = UDim2.new(0, 300, 0, 150)
-	battlePreparationFrame.Position = UDim2.new(0.5, -150, 0.1, 0)
-	battlePreparationFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-	battlePreparationFrame.BorderSizePixel = 0
-	battlePreparationFrame.ZIndex = 10
+	-- Grid size
+	local rows = Constants.BOARD_HEIGHT
+	local cols = Constants.BOARD_WIDTH
 	
-	-- Create corner radius
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 10)
-	corner.Parent = battlePreparationFrame
+	-- Hex size (as scale of parent container)
+	local hexWidth = 0.13
+	local hexHeight = 0.22
+	local aspectRatio = 0.92
 	
-	-- Create title
-	local titleLabel = Instance.new("TextLabel")
-	titleLabel.Name = "TitleLabel"
-	titleLabel.Size = UDim2.new(1, 0, 0, 40)
-	titleLabel.Position = UDim2.new(0, 0, 0, 0)
-	titleLabel.BackgroundTransparency = 1
-	titleLabel.Text = "Battle Preparation"
-	titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	titleLabel.TextScaled = true
-	titleLabel.Font = Enum.Font.GothamBold
-	titleLabel.Parent = battlePreparationFrame
+	-- Offset (half a hex width)
+	local offsetX = hexWidth / 2
+	local titleHeightOffset = 0.05
 	
-	-- Create timer label
-	local timerLabel = Instance.new("TextLabel")
-	timerLabel.Name = "TimerLabel"
-	timerLabel.Size = UDim2.new(1, 0, 0, 40)
-	timerLabel.Position = UDim2.new(0, 0, 0, 50)
-	timerLabel.BackgroundTransparency = 1
-	timerLabel.Text = "Time remaining: 10s"
-	timerLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
-	timerLabel.TextScaled = true
-	timerLabel.Font = Enum.Font.GothamBold
-	timerLabel.Parent = battlePreparationFrame
+	-- Compute total board width/height in scale
+	local boardWidth = (cols - 1) * hexWidth + hexWidth + offsetX
+	local boardHeight = hexHeight + (rows - 1) * (hexHeight * 0.85)
 	
-	-- Create instruction label
-	local instructionLabel = Instance.new("TextLabel")
-	instructionLabel.Name = "InstructionLabel"
-	instructionLabel.Size = UDim2.new(1, 0, 0, 40)
-	instructionLabel.Position = UDim2.new(0, 0, 0, 100)
-	instructionLabel.BackgroundTransparency = 1
-	instructionLabel.Text = "Arrange your units on the board!"
-	instructionLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-	instructionLabel.TextScaled = true
-	instructionLabel.Font = Enum.Font.Gotham
-	instructionLabel.Parent = battlePreparationFrame
+	-- Compute margins to center
+	local marginX = (1 - (boardWidth - 0.04)) / 2
+	local marginY = (1 - (boardHeight - titleHeightOffset)) / 2
 	
-	-- Add to PlayerGui
-	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
-	battlePreparationFrame.Parent = playerGui
-	
-	-- Hide initially
-	battlePreparationFrame.Visible = false
-	
-	return battlePreparationFrame
-end
-
--- Show challenge request
-function PVPChallengeUI.showChallengeRequest(challengerId: number, challengerName: string)
-	if not challengeRequestFrame then
-		PVPChallengeUI.createChallengeRequestUI()
-	end
-	
-	-- Update challenger name
-	local challengerLabel = challengeRequestFrame:FindFirstChild("ChallengerLabel")
-	if challengerLabel then
-		challengerLabel.Text = challengerName .. " wants to challenge you!"
-	end
-	
-	-- Show the frame
-	challengeRequestFrame.Visible = true
-	
-	-- Store challenger ID for response
-	PVPChallengeUI.currentChallengerId = challengerId
-end
-
--- Hide challenge request
-function PVPChallengeUI.hideChallengeRequest()
-	if challengeRequestFrame then
-		challengeRequestFrame.Visible = false
-	end
-	PVPChallengeUI.currentChallengerId = nil
-end
-
--- Show battle preparation
-function PVPChallengeUI.showBattlePreparation(challengeId: string, preparationTime: number)
-	if not battlePreparationFrame then
-		PVPChallengeUI.createBattlePreparationUI()
-	end
-	
-	currentChallengeId = challengeId
-	
-	-- Show the frame
-	battlePreparationFrame.Visible = true
-	
-	-- Start countdown timer
-	PVPChallengeUI.startPreparationTimer(preparationTime)
-end
-
--- Hide battle preparation
-function PVPChallengeUI.hideBattlePreparation()
-	if battlePreparationFrame then
-		battlePreparationFrame.Visible = false
-	end
-	currentChallengeId = nil
-	
-	-- Stop timer
-	if preparationTimer then
-		preparationTimer:Disconnect()
-		preparationTimer = nil
+	for row = 1, rows do
+		for col = 1, cols do
+			local hex = Instance.new("ImageButton")
+			hex.Size = UDim2.new(hexWidth, 0, hexHeight, 0)
+			hex.BackgroundTransparency = 1
+			hex.Image = "rbxassetid://135628423497794"
+			
+			-- Convert to bottom-up coordinate system for hex naming
+			local bottomUpRow = rows - row + 1
+			hex.Name = string.format("Hex_%d_%d", bottomUpRow, col)
+			
+			-- Aspect ratio lock
+			local constraint = Instance.new("UIAspectRatioConstraint")
+			constraint.AspectRatio = aspectRatio
+			constraint.Parent = hex
+			
+			-- Base pos
+			local posX = (col - 1) * hexWidth
+			local posY = (row - 1) * (hexHeight * 0.88)
+			
+			-- Row offset
+			if row % 2 == 0 then
+				posX = posX + offsetX
+			end
+			
+			-- Apply centering margin
+			posX = posX + marginX
+			posY = posY + marginY
+			
+			hex.Position = UDim2.new(posX, 0, posY, 0)
+			hex.Parent = pvpBoardFrame
+		end
 	end
 end
 
--- Start preparation timer
-function PVPChallengeUI.startPreparationTimer(duration: number)
-	if preparationTimer then
-		preparationTimer:Disconnect()
+-- Create PVP bench hexes
+function PVPChallengeUI.createPVPBenchHexes()
+	if not pvpBenchFrame then return end
+	
+	-- Grid size (bench is 1 row, 6 columns)
+	local benchCols = Constants.BENCH_CAPACITY
+	
+	-- Hex size (as scale of parent container)
+	local benchHexWidth = 0.13
+	local benchHexHeight = 0.55
+	local benchAspectRatio = 0.92
+	
+	-- Compute total bench width/height in scale
+	local benchWidth = benchCols * benchHexWidth
+	local benchHeight = benchHexHeight
+	
+	-- Calculate bench title height offset
+	local benchTitleHeightOffset = 0.1
+	
+	-- Compute margins to center in BenchFrame
+	local benchMarginX = (1 - (benchWidth - 0.04)) / 2
+	local benchMarginY = (1 - (benchHeight - benchTitleHeightOffset)) / 2
+	
+	for col = 1, benchCols do
+		local hex = Instance.new("ImageButton")
+		hex.Size = UDim2.new(benchHexWidth, 0, benchHexHeight, 0)
+		hex.BackgroundTransparency = 1
+		hex.Image = "rbxassetid://135628423497794"
+		hex.Name = string.format("BenchHex_%d", col)
+		
+		-- Aspect ratio lock
+		local constraint = Instance.new("UIAspectRatioConstraint")
+		constraint.AspectRatio = benchAspectRatio
+		constraint.Parent = hex
+		
+		-- Position (no staggering needed)
+		local posX = (col - 1) * benchHexWidth
+		local posY = 0
+		
+		-- Apply centering margin
+		posX = posX + benchMarginX
+		posY = posY + benchMarginY
+		
+		hex.Position = UDim2.new(posX, 0, posY, 0)
+		hex.Parent = pvpBenchFrame
+	end
+end
+
+-- Show PVP frames with board and bench data
+function PVPChallengeUI.showPVPFrames(boardState: DataStructures.BoardState, benchState: DataStructures.BenchState)
+	print("DEBUG: Showing PVP frames with board and bench data")
+	
+	if not pvpBoardFrame or not pvpBenchFrame then
+		print("DEBUG: Creating PVP frames...")
+		PVPChallengeUI.createPVPFrames()
+	end
+	
+	-- Store the PVP states for later use
+	currentPVPBoardState = boardState
+	currentPVPBenchState = benchState
+	print("DEBUG: Stored PVP board and bench states")
+	
+	-- Populate the frames with current board and bench data
+	PVPChallengeUI.updatePVPBoardDisplay(boardState)
+	PVPChallengeUI.updatePVPBenchDisplay(benchState)
+	print("DEBUG: Updated PVP board and bench displays")
+	
+	-- Show the frames
+	pvpBoardFrame.Visible = true
+	pvpBenchFrame.Visible = true
+	print("DEBUG: Made PVP frames visible")
+	
+	-- Show countdown label
+	if pvpCountdownLabel then
+		pvpCountdownLabel.Visible = true
+		print("DEBUG: Made countdown label visible")
+	else
+		warn("DEBUG: Countdown label not found!")
+	end
+end
+
+-- Hide PVP frames
+function PVPChallengeUI.hidePVPFrames()
+	if pvpBoardFrame then
+		pvpBoardFrame.Visible = false
+	end
+	if pvpBenchFrame then
+		pvpBenchFrame.Visible = false
+	end
+	if pvpCountdownLabel then
+		pvpCountdownLabel.Visible = false
+	end
+end
+
+-- Update PVP board display
+function PVPChallengeUI.updatePVPBoardDisplay(boardState: DataStructures.BoardState)
+	if not pvpBoardFrame or not boardState or not boardState.grid then
+		return
+	end
+	
+	-- Clear existing units
+	for _, child in pairs(pvpBoardFrame:GetChildren()) do
+		if child:IsA("ImageButton") and child.Name:find("Hex_") then
+			-- Clear any unit visuals in this hex
+			for _, unitVisual in pairs(child:GetChildren()) do
+				if unitVisual:IsA("ImageButton") and unitVisual ~= child then
+					unitVisual:Destroy()
+				end
+			end
+		end
+	end
+	
+	-- Place units from board state
+	for position, unit in pairs(boardState.grid) do
+		if position and unit then
+			PVPChallengeUI.placeUnitOnPVPBoard(unit, position)
+		end
+	end
+end
+
+-- Update PVP bench display
+function PVPChallengeUI.updatePVPBenchDisplay(benchState: DataStructures.BenchState)
+	if not pvpBenchFrame or not benchState or not benchState.units then
+		return
+	end
+	
+	-- Clear existing units
+	for _, child in pairs(pvpBenchFrame:GetChildren()) do
+		if child:IsA("ImageButton") and child.Name:find("BenchHex_") then
+			-- Clear any unit visuals in this hex
+			for _, unitVisual in pairs(child:GetChildren()) do
+				if unitVisual:IsA("ImageButton") and unitVisual ~= child then
+					unitVisual:Destroy()
+				end
+			end
+		end
+	end
+	
+	-- Place units from bench state
+	local units = {}
+	for unitId, unit in pairs(benchState.units) do
+		if unit then
+			table.insert(units, unit)
+		end
+	end
+	
+	-- Sort units by their slot to maintain correct order
+	table.sort(units, function(a, b)
+		return (a.slot or 0) < (b.slot or 0)
+	end)
+	
+	-- Place units in their correct slots
+	for _, unit in ipairs(units) do
+		local slot = unit.slot or 1
+		if slot <= benchState.maxCapacity then
+			PVPChallengeUI.placeUnitOnPVPBench(unit, slot)
+		end
+	end
+end
+
+-- Place unit on PVP board
+function PVPChallengeUI.placeUnitOnPVPBoard(unit: DataStructures.Unit, position: Vector2)
+	if not pvpBoardFrame or not position then
+		return
+	end
+	
+	-- Handle position parsing (same logic as regular UI)
+	local x, y
+	if typeof(position) == "Vector2" then
+		x = position.X
+		y = position.Y
+	elseif typeof(position) == "table" then
+		x = position.X or position.x
+		y = position.Y or position.y
+	elseif typeof(position) == "string" then
+		local match = string.match(position, "%(([^%)]+)%)")
+		if match then
+			local parts = {}
+			for part in string.gmatch(match, "[^,]+") do
+				table.insert(parts, part:match("^%s*(%-?%d+)%s*$"))
+			end
+			if #parts >= 2 and parts[1] and parts[2] then
+				x = tonumber(parts[1])
+				y = tonumber(parts[2])
+			else
+				return
+			end
+		else
+			return
+		end
+	else
+		return
+	end
+	
+	if not x or not y then
+		return
+	end
+	
+	-- Convert to hex naming
+	local _rows = Constants.BOARD_HEIGHT
+	local hexRow = y + 1
+	local hexCol = x + 1
+	local hexName = string.format("Hex_%d_%d", hexRow, hexCol)
+	local hex = pvpBoardFrame:FindFirstChild(hexName)
+	
+	if hex then
+		-- Create unit visual
+		local unitVisual = Instance.new("ImageButton")
+		unitVisual.Size = UDim2.new(0.8, 0, 0.8, 0)
+		unitVisual.Position = UDim2.new(0.1, 0, 0, 0)
+		unitVisual.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+		unitVisual.BorderSizePixel = 0
+		unitVisual.Image = unit.imageAssetId
+		unitVisual.Parent = hex
+		
+		-- Create tier label overlay
+		local tierLabel = Instance.new("TextLabel")
+		tierLabel.Size = UDim2.new(0.3, 0, 0.3, 0)
+		tierLabel.Position = UDim2.new(0.7, 0, 0.7, 0)
+		tierLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+		tierLabel.BackgroundTransparency = 0.3
+		tierLabel.Text = "T" .. unit.tier
+		tierLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		tierLabel.TextScaled = true
+		tierLabel.Font = Enum.Font.GothamBold
+		tierLabel.Parent = unitVisual
+	end
+end
+
+-- Place unit on PVP bench
+function PVPChallengeUI.placeUnitOnPVPBench(unit: DataStructures.Unit, benchSlot: number)
+	if not pvpBenchFrame or not benchSlot or benchSlot <= 0 then
+		return
+	end
+	
+	local hexName = string.format("BenchHex_%d", benchSlot)
+	local hex = pvpBenchFrame:FindFirstChild(hexName)
+	
+	if hex then
+		-- Create unit visual
+		local unitVisual = Instance.new("ImageButton")
+		unitVisual.Size = UDim2.new(0.8, 0, 0.8, 0)
+		unitVisual.Position = UDim2.new(0.1, 0, 0, 0)
+		unitVisual.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+		unitVisual.BorderSizePixel = 0
+		unitVisual.Image = unit.imageAssetId
+		unitVisual.Parent = hex
+		
+		-- Create tier label overlay
+		local tierLabel = Instance.new("TextLabel")
+		tierLabel.Size = UDim2.new(0.3, 0, 0.3, 0)
+		tierLabel.Position = UDim2.new(0.7, 0, 0.7, 0)
+		tierLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+		tierLabel.BackgroundTransparency = 0.3
+		tierLabel.Text = "T" .. unit.tier
+		tierLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		tierLabel.TextScaled = true
+		tierLabel.Font = Enum.Font.GothamBold
+		tierLabel.Parent = unitVisual
+	end
+end
+
+
+-- Start PVP countdown timer
+function PVPChallengeUI.startPVPCountdown(duration: number)
+	print("DEBUG: Starting PVP countdown with duration: " .. duration .. " seconds")
+	
+	if countdownTimer then
+		countdownTimer:Disconnect()
 	end
 	
 	local timeRemaining = duration
-	local timerLabel = battlePreparationFrame:FindFirstChild("TimerLabel")
+	local lastUpdateTime = tick()
 	
-	preparationTimer = game:GetService("RunService").Heartbeat:Connect(function()
+	-- Update the countdown label immediately
+	if pvpCountdownLabel then
+		pvpCountdownLabel.Text = "Battle starting in: " .. timeRemaining .. "s"
+	end
+	
+	countdownTimer = game:GetService("RunService").Heartbeat:Connect(function()
+		local currentTime = tick()
+		
+		-- Only update every second
+		if currentTime - lastUpdateTime >= 1 then
+			lastUpdateTime = currentTime
+			timeRemaining = timeRemaining - 1
+			
 		if timeRemaining <= 0 then
-			PVPChallengeUI.hideBattlePreparation()
+				print("DEBUG: Countdown finished, starting battle")
+				-- Countdown finished, hide PVP frames and start battle
+				PVPChallengeUI.hidePVPFrames()
+				PVPChallengeUI.startBattle()
 			return
 		end
 		
-		if timerLabel then
-			timerLabel.Text = "Time remaining: " .. timeRemaining .. "s"
+			if pvpCountdownLabel then
+				pvpCountdownLabel.Text = "Battle starting in: " .. timeRemaining .. "s"
+			else
+				warn("DEBUG: Countdown label not found during countdown!")
+			end
 		end
-		
-		timeRemaining = timeRemaining - 1
 	end)
 end
 
--- Accept challenge
-function PVPChallengeUI.acceptChallenge()
-	if not PVPChallengeUI.currentChallengerId then
-		return
-	end
-	
-	-- Send accept event to server
+-- Start battle (teleport players and populate boards)
+function PVPChallengeUI.startBattle()
+	-- Send battle start request to server
 	local remoteEventsFolder = ReplicatedStorage:WaitForChild("RemoteEvents")
-	local acceptChallengeEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.ACCEPT_CHALLENGE)
-	acceptChallengeEvent:FireServer()
-	
-	-- Hide the challenge request
-	PVPChallengeUI.hideChallengeRequest()
+	local startBattleEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.START_BATTLE)
+	startBattleEvent:FireServer(currentChallengeId)
 end
 
--- Reject challenge
-function PVPChallengeUI.rejectChallenge()
-	if not PVPChallengeUI.currentChallengerId then
-		return
+-- Update player's board with their PVP board state
+function PVPChallengeUI.updatePlayerBoardFromPVP()
+	-- Get the current PVP board and bench states
+	local pvpBoardState = PVPChallengeUI.getCurrentPVPBoardState()
+	local pvpBenchState = PVPChallengeUI.getCurrentPVPBenchState()
+	
+	if pvpBoardState and pvpBenchState then
+		-- Update the main UI with the PVP states
+		local UI = require(script.Parent.UI)
+		UI.updateBoardDisplay(pvpBoardState)
+		UI.updateBenchDisplay(pvpBenchState)
+		
+		print("Updated player board from PVP state")
 	end
-	
-	-- Send reject event to server
-	local remoteEventsFolder = ReplicatedStorage:WaitForChild("RemoteEvents")
-	local rejectChallengeEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.REJECT_CHALLENGE)
-	rejectChallengeEvent:FireServer()
-	
-	-- Hide the challenge request
-	PVPChallengeUI.hideChallengeRequest()
 end
+
+-- Get current PVP board state (stored from when PVP frames were shown)
+function PVPChallengeUI.getCurrentPVPBoardState()
+	return currentPVPBoardState
+end
+
+-- Get current PVP bench state (stored from when PVP frames were shown)
+function PVPChallengeUI.getCurrentPVPBenchState()
+	return currentPVPBenchState
+end
+
 
 -- Challenge another player
 function PVPChallengeUI.challengePlayer(targetPlayerId: number)
@@ -300,34 +511,37 @@ end
 
 -- Initialize PVP Challenge UI
 function PVPChallengeUI.init()
+	print("DEBUG: Initializing PVP Challenge UI...")
+	
 	-- Create UI elements
-	PVPChallengeUI.createChallengeRequestUI()
-	PVPChallengeUI.createBattlePreparationUI()
+	PVPChallengeUI.createPVPFrames()
 	
 	-- Set up RemoteEvent handlers
 	local remoteEventsFolder = ReplicatedStorage:WaitForChild("RemoteEvents")
 	
-	-- Handle challenge requests
-	local showChallengeRequestEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.SHOW_CHALLENGE_REQUEST)
-	showChallengeRequestEvent.OnClientEvent:Connect(function(challengerId, challengerName)
-		PVPChallengeUI.showChallengeRequest(challengerId, challengerName)
-	end)
-	
-	-- Handle battle preparation start
-	local startBattlePrepEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.START_BATTLE_PREPARATION)
-	startBattlePrepEvent.OnClientEvent:Connect(function(challengeId, preparationTime)
-		PVPChallengeUI.showBattlePreparation(challengeId, preparationTime)
+	-- Handle PVP frames show (new event for showing PVP board/bench)
+	local showPVPFramesEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.SHOW_PVP_FRAMES)
+	showPVPFramesEvent.OnClientEvent:Connect(function(challengeId, boardState, benchState, countdownTime)
+		print("DEBUG: Received show PVP frames event")
+		currentChallengeId = challengeId
+		PVPChallengeUI.showPVPFrames(boardState, benchState)
+		PVPChallengeUI.startPVPCountdown(countdownTime)
 	end)
 	
 	-- Handle battle start
 	local startBattleEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.START_BATTLE)
 	startBattleEvent.OnClientEvent:Connect(function(challengeId)
-		PVPChallengeUI.hideBattlePreparation()
+		print("DEBUG: Received battle start event for challenge: " .. challengeId)
+		PVPChallengeUI.hidePVPFrames()
+		
+		-- Update the player's board with their PVP board state
+		PVPChallengeUI.updatePlayerBoardFromPVP()
+		
 		-- Battle system will be implemented later
 		print("Battle starting for challenge: " .. challengeId)
 	end)
 	
-	print("PVP Challenge UI initialized")
+	print("DEBUG: PVP Challenge UI initialized successfully")
 end
 
 return PVPChallengeUI

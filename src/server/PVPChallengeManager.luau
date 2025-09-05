@@ -4,7 +4,7 @@
 ]]
 
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local _ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RemoteEvents = require(script.Parent.RemoteEvents)
 local Constants = require(game.ReplicatedStorage.Shared.Constants)
 
@@ -15,7 +15,7 @@ local activeChallenges = {} -- {challengeId = challengeData}
 local playerChallenges = {} -- {playerId = challengeId}
 
 -- Challenge data structure
-local ChallengeData = {
+local _ChallengeData = {
 	challengerId = nil,
 	challengedId = nil,
 	challengeTime = nil,
@@ -55,12 +55,16 @@ end
 
 -- Create a new challenge
 function PVPChallengeManager.createChallenge(challengerId: number, challengedId: number): string?
+	print("DEBUG: Creating challenge from challenger ID:", challengerId, "to challenged ID:", challengedId)
+	
 	-- Validate players
 	if not PVPChallengeManager.canPlayerBeChallenged(challengerId) then
+		warn("DEBUG: Challenger cannot be challenged:", challengerId)
 		return nil
 	end
 	
 	if not PVPChallengeManager.canPlayerBeChallenged(challengedId) then
+		warn("DEBUG: Challenged player cannot be challenged:", challengedId)
 		return nil
 	end
 	
@@ -79,6 +83,8 @@ function PVPChallengeManager.createChallenge(challengerId: number, challengedId:
 	activeChallenges[challengeId] = challenge
 	playerChallenges[challengerId] = challengeId
 	playerChallenges[challengedId] = challengeId
+	
+	print("DEBUG: Challenge stored with ID:", challengeId, "Challenger:", challengerId, "Challenged:", challengedId)
 	
 	-- Send challenge notification to challenged player
 	local challengedPlayer = Players:GetPlayerByUserId(challengedId)
@@ -107,13 +113,19 @@ end
 
 -- Accept a challenge
 function PVPChallengeManager.acceptChallenge(challengedId: number): boolean
+	print("DEBUG: Accept challenge called for challenged player ID:", challengedId)
+	
 	local challengeId = playerChallenges[challengedId]
 	if not challengeId then
+		warn("DEBUG: No challenge found for challenged player ID:", challengedId)
 		return false
 	end
 	
+	print("DEBUG: Found challenge ID:", challengeId)
+	
 	local challenge = activeChallenges[challengeId]
 	if not challenge or challenge.status ~= "pending" then
+		warn("DEBUG: Challenge not found or not pending. Status:", challenge and challenge.status or "nil")
 		return false
 	end
 	
@@ -129,18 +141,16 @@ function PVPChallengeManager.acceptChallenge(challengedId: number): boolean
 		local challengeAcceptedEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
 		challengeAcceptedEvent:FireClient(challengerPlayer, "Your challenge was accepted! Battle preparation starting...", 5)
 		
-		-- Start battle preparation timer for challenger
-		local startBattlePrepEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.START_BATTLE_PREPARATION)
-		startBattlePrepEvent:FireClient(challengerPlayer, challengeId, Constants.BATTLE_PREPARATION_TIME)
+		-- Show PVP frames for challenger
+		PVPChallengeManager.showPVPFramesForPlayer(challengerPlayer, challengeId)
 	end
 	
 	if challengedPlayer then
 		local challengeAcceptedEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
 		challengeAcceptedEvent:FireClient(challengedPlayer, "Challenge accepted! Battle preparation starting...", 5)
 		
-		-- Start battle preparation timer for challenged player
-		local startBattlePrepEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.START_BATTLE_PREPARATION)
-		startBattlePrepEvent:FireClient(challengedPlayer, challengeId, Constants.BATTLE_PREPARATION_TIME)
+		-- Show PVP frames for challenged player
+		PVPChallengeManager.showPVPFramesForPlayer(challengedPlayer, challengeId)
 	end
 	
 	print("Challenge accepted: " .. challengeId)
@@ -176,6 +186,28 @@ function PVPChallengeManager.rejectChallenge(challengedId: number): boolean
 	return true
 end
 
+-- Show PVP frames for a player
+function PVPChallengeManager.showPVPFramesForPlayer(player: Player, challengeId: string)
+	print("DEBUG: Showing PVP frames for player: " .. player.Name .. " (ID: " .. player.UserId .. ")")
+	
+	-- Get player data to populate the frames
+	local PlayerDataManager = require(script.Parent.PlayerData)
+	local playerData = PlayerDataManager.getPlayerData(player.UserId)
+	
+	if not playerData then
+		warn("DEBUG: Player data not found for user: " .. player.UserId)
+		return
+	end
+	
+	print("DEBUG: Player data found, board units: " .. playerData.boardState.currentUnits .. ", bench units: " .. playerData.benchState.currentCapacity)
+	
+	-- Send PVP frames to client with current board and bench state
+	local showPVPFramesEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_PVP_FRAMES)
+	showPVPFramesEvent:FireClient(player, challengeId, playerData.boardState, playerData.benchState, Constants.BATTLE_PREPARATION_TIME)
+	
+	print("DEBUG: PVP frames event sent to player: " .. player.Name)
+end
+
 -- Start battle after preparation time
 function PVPChallengeManager.startBattle(challengeId: string): boolean
 	local challenge = activeChallenges[challengeId]
@@ -183,41 +215,181 @@ function PVPChallengeManager.startBattle(challengeId: string): boolean
 		return false
 	end
 	
-	-- Check if preparation time has elapsed
-	local currentTime = os.time()
-	if not challenge.battlePreparationTime or 
-	   (currentTime - challenge.battlePreparationTime) < Constants.BATTLE_PREPARATION_TIME then
-		return false
-	end
-	
 	-- Update challenge status
 	challenge.status = "battling"
-	challenge.battleStartTime = currentTime
+	challenge.battleStartTime = os.time()
 	
-	-- Notify both players that battle is starting
+	-- Get both players
 	local challengerPlayer = Players:GetPlayerByUserId(challenge.challengerId)
 	local challengedPlayer = Players:GetPlayerByUserId(challenge.challengedId)
 	
-	if challengerPlayer then
-		local battleStartEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
-		battleStartEvent:FireClient(challengerPlayer, "Battle starting! Good luck!", 3)
-		
-		-- Send battle start signal
-		local startBattleEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.START_BATTLE)
-		startBattleEvent:FireClient(challengerPlayer, challengeId)
+	if not challengerPlayer or not challengedPlayer then
+		warn("One or both players not found for battle: " .. challengeId)
+		return false
 	end
 	
-	if challengedPlayer then
-		local battleStartEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
-		battleStartEvent:FireClient(challengedPlayer, "Battle starting! Good luck!", 3)
-		
-		-- Send battle start signal
-		local startBattleEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.START_BATTLE)
-		startBattleEvent:FireClient(challengedPlayer, challengeId)
-	end
+	-- Teleport both players to the challenged player's board
+	PVPChallengeManager.teleportPlayersToBattle(challengerPlayer, challengedPlayer)
+	
+	-- Populate both players' units on the board
+	PVPChallengeManager.populateBattleBoards(challengerPlayer, challengedPlayer)
+	
+	-- Notify both players that battle is starting
+	local battleStartEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
+	battleStartEvent:FireClient(challengerPlayer, "Battle starting! Good luck!", 3)
+	battleStartEvent:FireClient(challengedPlayer, "Battle starting! Good luck!", 3)
+	
+	-- Send battle start signal to both players
+	local startBattleEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.START_BATTLE)
+	startBattleEvent:FireClient(challengerPlayer, challengeId)
+	startBattleEvent:FireClient(challengedPlayer, challengeId)
 	
 	print("Battle started: " .. challengeId)
 	return true
+end
+
+-- Teleport both players to the challenged player's board
+function PVPChallengeManager.teleportPlayersToBattle(challengerPlayer: Player, challengedPlayer: Player)
+	-- Find the challenged player's arena in the main workspace
+	local challengedArena = nil
+	
+	-- Search through all lobbies in workspace
+	for _, lobby in pairs(game.Workspace:GetChildren()) do
+		if lobby.Name:find("Lobby_") then
+			local spawnPoints = lobby:FindFirstChild("SpawnPoints")
+			if spawnPoints then
+				local playerArena = spawnPoints:FindFirstChild(tostring(challengedPlayer.UserId))
+				if playerArena then
+					challengedArena = playerArena
+					break
+				end
+			end
+		end
+	end
+	
+	if not challengedArena then
+		warn("Could not find challenged player's arena")
+		return
+	end
+	
+	-- Get the arena's spawn location
+	local spawnLocation = challengedArena:FindFirstChild("SpawnLocation")
+	if not spawnLocation then
+		warn("Could not find spawn location in challenged player's arena")
+		return
+	end
+	
+	-- Teleport challenger to challenged player's arena
+	if challengerPlayer.Character then
+		local humanoidRootPart = challengerPlayer.Character:FindFirstChild("HumanoidRootPart")
+		if humanoidRootPart then
+			humanoidRootPart.CFrame = spawnLocation.CFrame + Vector3.new(0, 5, 0)
+		end
+	end
+	
+	-- Teleport challenged player to their own arena (in case they're not there)
+	if challengedPlayer.Character then
+		local humanoidRootPart = challengedPlayer.Character:FindFirstChild("HumanoidRootPart")
+		if humanoidRootPart then
+			humanoidRootPart.CFrame = spawnLocation.CFrame + Vector3.new(0, 5, 0)
+		end
+	end
+	
+	print("Teleported both players to challenged player's arena")
+end
+
+-- Populate both players' units on the board
+function PVPChallengeManager.populateBattleBoards(challengerPlayer: Player, challengedPlayer: Player)
+	-- Get player data for both players
+	local PlayerDataManager = require(script.Parent.PlayerData)
+	local challengerData = PlayerDataManager.getPlayerData(challengerPlayer.UserId)
+	local challengedData = PlayerDataManager.getPlayerData(challengedPlayer.UserId)
+	
+	if not challengerData or not challengedData then
+		warn("Could not get player data for one or both players")
+		return
+	end
+	
+	-- Find the challenged player's arena in the main workspace
+	local challengedArena = nil
+	
+	-- Search through all lobbies in workspace
+	for _, lobby in pairs(game.Workspace:GetChildren()) do
+		if lobby.Name:find("Lobby_") then
+			local spawnPoints = lobby:FindFirstChild("SpawnPoints")
+			if spawnPoints then
+				local playerArena = spawnPoints:FindFirstChild(tostring(challengedPlayer.UserId))
+				if playerArena then
+					challengedArena = playerArena
+					break
+				end
+			end
+		end
+	end
+	
+	if not challengedArena then
+		warn("Could not find challenged player's arena")
+		return
+	end
+	
+	-- Get the enemy unit board
+	local enemyUnitBoard = challengedArena:FindFirstChild("Enemy Unit Board")
+	if not enemyUnitBoard then
+		warn("Could not find Enemy Unit Board in challenged player's arena")
+		return
+	end
+	
+	-- Populate challenger's units on the enemy board
+	PVPChallengeManager.populateEnemyBoard(enemyUnitBoard, challengerData.boardState)
+	
+	-- Update challenged player's board with their current PVP board state
+	-- This will be handled by the client when they receive the battle start signal
+	
+	print("Populated battle boards for both players")
+end
+
+-- Populate enemy board with challenger's units
+function PVPChallengeManager.populateEnemyBoard(enemyBoard: Instance, boardState: any)
+	-- Clear existing enemy units
+	for _, child in pairs(enemyBoard:GetChildren()) do
+		if child:IsA("Model") and child.Name:find("EnemyUnit_") then
+			child:Destroy()
+		end
+	end
+	
+	-- Place challenger's units on the enemy board
+	for position, unit in pairs(boardState.grid) do
+		if position and unit then
+			PVPChallengeManager.placeEnemyUnit(enemyBoard, unit, position)
+		end
+	end
+end
+
+-- Place a single enemy unit on the board
+function PVPChallengeManager.placeEnemyUnit(enemyBoard: Instance, unit: any, position: Vector2)
+	-- Find the appropriate hex on the enemy board
+	local hexName = string.format("Hex_%d_%d", position.Y + 1, position.X + 1)
+	local hex = enemyBoard:FindFirstChild(hexName)
+	
+	if hex then
+		-- Create a simple enemy unit model (placeholder for now)
+		local enemyUnit = Instance.new("Model")
+		enemyUnit.Name = "EnemyUnit_" .. unit.id
+		enemyUnit.Parent = enemyBoard
+		
+		-- Create a simple part to represent the unit
+		local part = Instance.new("Part")
+		part.Name = "UnitPart"
+		part.Size = Vector3.new(2, 2, 2)
+		part.BrickColor = BrickColor.new("Bright red")
+		part.Material = Enum.Material.Neon
+		part.Parent = enemyUnit
+		
+		-- Position the unit at the hex location
+		part.CFrame = hex.CFrame + Vector3.new(0, 2, 0)
+		
+		print("Placed enemy unit " .. unit.name .. " at position " .. tostring(position))
+	end
 end
 
 -- End battle and determine winner
@@ -231,7 +403,7 @@ function PVPChallengeManager.endBattle(challengeId: string, winnerId: number): b
 	challenge.status = "completed"
 	
 	-- Determine winner and loser
-	local loserId = (winnerId == challenge.challengerId) and challenge.challengedId or challenge.challengerId
+	local _loserId = (winnerId == challenge.challengerId) and challenge.challengedId or challenge.challengerId
 	
 	-- Calculate rewards (this will be implemented when battle system is added)
 	-- For now, just notify players
@@ -280,7 +452,7 @@ function PVPChallengeManager.cleanupChallenge(challengeId: string)
 end
 
 -- Get challenge data for a player
-function PVPChallengeManager.getPlayerChallenge(playerId: number): ChallengeData?
+function PVPChallengeManager.getPlayerChallenge(playerId: number): any?
 	local challengeId = playerChallenges[playerId]
 	if not challengeId then
 		return nil
