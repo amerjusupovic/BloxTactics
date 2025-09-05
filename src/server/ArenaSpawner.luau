@@ -148,6 +148,44 @@ function ArenaSpawner:createGrassArena(playerId: number, playerName: string, pla
 	-- Parent the cloned arena to the player folder
 	clonedArena.Parent = playerFolder
 	
+	
+	-- Ensure Enemy Unit Board exists
+	local enemyUnitBoard = clonedArena:FindFirstChild("Enemy Unit Board")
+	if not enemyUnitBoard then
+		enemyUnitBoard = Instance.new("Folder")
+		enemyUnitBoard.Name = "Enemy Unit Board"
+		enemyUnitBoard.Parent = clonedArena
+		
+		-- Create hexes for the enemy board (same structure as regular board)
+		for enemyRow = 1, 4 do
+			for enemyCol = 1, 7 do
+				local hex = Instance.new("Part")
+				hex.Name = string.format("Hex_%d_%d", enemyRow, enemyCol)
+				hex.Size = Vector3.new(4, 0.2, 4)
+				hex.Material = Enum.Material.Neon
+				hex.BrickColor = BrickColor.new("Bright red")
+				hex.Anchored = true
+				hex.CanCollide = false
+				hex.Transparency = 0.7
+				
+				-- Position hexes in a grid pattern
+				local hexPosition = Vector3.new(
+					(enemyCol - 4) * 5, -- Center around 0, spacing of 5
+					0.1, -- Slightly above ground
+					(enemyRow - 2.5) * 5 -- Center around 0, spacing of 5
+				)
+				
+				-- Offset for enemy board (to the right of the regular board)
+				hexPosition = hexPosition + Vector3.new(20, 0, 0)
+				
+				hex.Position = hexPosition
+				hex.Parent = enemyUnitBoard
+			end
+		end
+		
+		print("Created Enemy Unit Board with hexes for player " .. playerName)
+	end
+	
 	-- Debug: Print the actual position after cloning
 	local actualPosition
 	if clonedArena:IsA("Model") then

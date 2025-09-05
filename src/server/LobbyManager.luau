@@ -209,6 +209,13 @@ function LobbyManager.setupRemoteEventHandlers()
 		PVPChallengeManager.rejectChallenge(player.UserId)
 	end)
 	
+	-- Handle battle start (when countdown ends)
+	local startBattleEvent = remoteEventsFolder:WaitForChild("StartBattle")
+	startBattleEvent.OnServerEvent:Connect(function(player, challengeId)
+		print("Player " .. player.Name .. " requesting battle start for challenge " .. challengeId)
+		PVPChallengeManager.startBattle(challengeId)
+	end)
+	
 	print("Server-side RemoteEvent handlers set up successfully!")
 end
 
@@ -410,6 +417,21 @@ function LobbyManager.getPlayerLobby(playerId: number): any
 	end
 	
 	return lobbies[lobbyId]
+end
+
+-- Function to get a player's arena directly (to avoid circular dependencies)
+function LobbyManager.getPlayerArena(playerId: number): Instance?
+	local lobbyId = playerLobbies[playerId]
+	if not lobbyId then
+		return nil
+	end
+	
+	local lobbyData = lobbies[lobbyId]
+	if not lobbyData or not lobbyData.spawnPoints then
+		return nil
+	end
+	
+	return lobbyData.spawnPoints:FindFirstChild(tostring(playerId))
 end
 
 -- Function to get all lobbies

@@ -323,13 +323,18 @@ function PVPChallengeUI.startPVPCountdown(duration: number)
 			lastUpdateTime = currentTime
 			timeRemaining = timeRemaining - 1
 			
-		if timeRemaining <= 0 then
+			if timeRemaining <= 0 then
 				print("DEBUG: Countdown finished, starting battle")
+				-- Disconnect the timer to prevent further calls
+				if countdownTimer then
+					countdownTimer:Disconnect()
+					countdownTimer = nil
+				end
 				-- Countdown finished, hide PVP frames and start battle
 				PVPChallengeUI.hidePVPFrames()
 				PVPChallengeUI.startBattle()
-			return
-		end
+				return
+			end
 		
 			if pvpCountdownLabel then
 				pvpCountdownLabel.Text = "Battle starting in: " .. timeRemaining .. "s"

@@ -29,6 +29,65 @@ local function generateChallengeId(): string
 	return "challenge_" .. os.time() .. "_" .. math.random(1000, 9999)
 end
 
+-- Helper function to find a player's arena without circular dependencies
+function PVPChallengeManager.findPlayerArena(playerId: number): Instance?
+	-- Search through all lobbies in workspace to find the player's arena
+	for _, lobby in pairs(game.Workspace:GetChildren()) do
+		if lobby.Name:find("Lobby_") then
+			local spawnPoints = lobby:FindFirstChild("SpawnPoints")
+			if spawnPoints then
+				local playerArena = spawnPoints:FindFirstChild(tostring(playerId))
+				if playerArena then
+					return playerArena
+				end
+			end
+		end
+	end
+	return nil
+end
+
+-- Helper function to ensure arena has required battle components
+function PVPChallengeManager.ensureArenaBattleComponents(arena: Instance, playerName: string)
+	if not arena then return end
+	
+	-- Ensure Enemy Unit Board exists
+	local enemyUnitBoard = arena:FindFirstChild("Enemy Unit Board")
+	if not enemyUnitBoard then
+		enemyUnitBoard = Instance.new("Folder")
+		enemyUnitBoard.Name = "Enemy Unit Board"
+		enemyUnitBoard.Parent = arena
+		
+		-- Create hexes for the enemy board (same structure as regular board)
+		for enemyRow = 1, 4 do
+			for enemyCol = 1, 7 do
+				local hex = Instance.new("Part")
+				hex.Name = string.format("Hex_%d_%d", enemyRow, enemyCol)
+				hex.Size = Vector3.new(4, 0.2, 4)
+				hex.Material = Enum.Material.Neon
+				hex.BrickColor = BrickColor.new("Bright red")
+				hex.Anchored = true
+				hex.CanCollide = false
+				hex.Transparency = 0.7
+				
+				-- Position hexes in a grid pattern
+				local hexPosition = Vector3.new(
+					(enemyCol - 4) * 5, -- Center around 0, spacing of 5
+					0.1, -- Slightly above ground
+					(enemyRow - 2.5) * 5 -- Center around 0, spacing of 5
+				)
+				
+				-- Offset for enemy board (to the right of the regular board)
+				hexPosition = hexPosition + Vector3.new(20, 0, 0)
+				
+				hex.Position = hexPosition
+				hex.Parent = enemyUnitBoard
+			end
+		end
+		
+		print("Created missing Enemy Unit Board with hexes for player " .. playerName)
+	end
+end
+
 -- Check if player is already in a challenge
 function PVPChallengeManager.isPlayerInChallenge(playerId: number): boolean
 	return playerChallenges[playerId] ~= nil
@@ -217,7 +276,20 @@ end
 -- Start battle after preparation time
 function PVPChallengeManager.startBattle(challengeId: string): boolean
 	local challenge = activeChallenges[challengeId]
-	if not challenge or challenge.status ~= "accepted" then
+	if not challenge then
+		warn("Cannot start battle - challenge not found: " .. challengeId)
+		return false
+	end
+	
+	-- Check if battle has already started
+	if challenge.status == "battling" then
+		print("Battle already started for challenge: " .. challengeId)
+		return true
+	end
+	
+	-- Check if challenge is in the correct state
+	if challenge.status ~= "accepted" then
+		warn("Cannot start battle - challenge not accepted: " .. challengeId .. " (status: " .. challenge.status .. ")")
 		return false
 	end
 	
@@ -233,6 +305,8 @@ function PVPChallengeManager.startBattle(challengeId: string): boolean
 		warn("One or both players not found for battle: " .. challengeId)
 		return false
 	end
+	
+	print("Starting battle between " .. challengerPlayer.Name .. " and " .. challengedPlayer.Name)
 	
 	-- Teleport both players to the challenged player's board
 	PVPChallengeManager.teleportPlayersToBattle(challengerPlayer, challengedPlayer)
@@ -256,56 +330,73 @@ end
 
 -- Teleport both players to the challenged player's board
 function PVPChallengeManager.teleportPlayersToBattle(challengerPlayer: Player, challengedPlayer: Player)
-	-- Find the challenged player's arena in the main workspace
-	local challengedArena = nil
+	print("Teleporting players to battle arena...")
 	
-	-- Search through all lobbies in workspace
-	for _, lobby in pairs(game.Workspace:GetChildren()) do
-		if lobby.Name:find("Lobby_") then
-			local spawnPoints = lobby:FindFirstChild("SpawnPoints")
-			if spawnPoints then
-				local playerArena = spawnPoints:FindFirstChild(tostring(challengedPlayer.UserId))
-				if playerArena then
-					challengedArena = playerArena
-					break
-				end
-			end
-		end
-	end
+	-- Find the challenged player's arena using the lobby system
+	local challengedArena = PVPChallengeManager.findPlayerArena(challengedPlayer.UserId)
 	
 	if not challengedArena then
-		warn("Could not find challenged player's arena")
+		warn("Could not find challenged player's arena for " .. challengedPlayer.Name)
 		return
 	end
 	
-	-- Get the arena's spawn location
-	local spawnLocation = challengedArena:FindFirstChild("SpawnLocation")
-	if not spawnLocation then
-		warn("Could not find spawn location in challenged player's arena")
-		return
+	-- Ensure the arena has the required battle components
+	PVPChallengeManager.ensureArenaBattleComponents(challengedArena, challengedPlayer.Name)
+	
+	-- Get the arena's center position
+	local arenaCenter
+	if challengedArena:IsA("Model") then
+		arenaCenter = challengedArena:GetPivot().Position
+	else
+		-- If it's a folder, calculate center from children
+		local totalPosition = Vector3.new(0, 0, 0)
+		local partCount = 0
+		for _, child in pairs(challengedArena:GetDescendants()) do
+			if child:IsA("BasePart") then
+				totalPosition = totalPosition + child.Position
+				partCount = partCount + 1
+			end
+		end
+		if partCount > 0 then
+			arenaCenter = totalPosition / partCount
+		else
+			arenaCenter = Vector3.new(0, 5, 0)
+		end
 	end
 	
 	-- Teleport challenger to challenged player's arena
 	if challengerPlayer.Character then
 		local humanoidRootPart = challengerPlayer.Character:FindFirstChild("HumanoidRootPart")
 		if humanoidRootPart then
-			humanoidRootPart.CFrame = spawnLocation.CFrame + Vector3.new(0, 5, 0)
+			humanoidRootPart.CFrame = CFrame.new(arenaCenter + Vector3.new(0, 5, 0))
+			print("Teleported challenger " .. challengerPlayer.Name .. " to battle arena at " .. tostring(arenaCenter))
+		else
+			warn("Could not find HumanoidRootPart for challenger " .. challengerPlayer.Name)
 		end
+	else
+		warn("Challenger " .. challengerPlayer.Name .. " has no character")
 	end
 	
 	-- Teleport challenged player to their own arena (in case they're not there)
 	if challengedPlayer.Character then
 		local humanoidRootPart = challengedPlayer.Character:FindFirstChild("HumanoidRootPart")
 		if humanoidRootPart then
-			humanoidRootPart.CFrame = spawnLocation.CFrame + Vector3.new(0, 5, 0)
+			humanoidRootPart.CFrame = CFrame.new(arenaCenter + Vector3.new(0, 5, 0))
+			print("Teleported challenged player " .. challengedPlayer.Name .. " to battle arena at " .. tostring(arenaCenter))
+		else
+			warn("Could not find HumanoidRootPart for challenged player " .. challengedPlayer.Name)
 		end
+	else
+		warn("Challenged player " .. challengedPlayer.Name .. " has no character")
 	end
 	
-	print("Teleported both players to challenged player's arena")
+	print("Battle teleportation completed")
 end
 
 -- Populate both players' units on the board
 function PVPChallengeManager.populateBattleBoards(challengerPlayer: Player, challengedPlayer: Player)
+	print("Populating battle boards...")
+	
 	-- Get player data for both players
 	local PlayerDataManager = require(script.Parent.PlayerData)
 	local challengerData = PlayerDataManager.getPlayerData(challengerPlayer.UserId)
@@ -316,32 +407,23 @@ function PVPChallengeManager.populateBattleBoards(challengerPlayer: Player, chal
 		return
 	end
 	
-	-- Find the challenged player's arena in the main workspace
-	local challengedArena = nil
+	print("Challenger " .. challengerPlayer.Name .. " has " .. challengerData.boardState.currentUnits .. " units on board")
+	print("Challenged " .. challengedPlayer.Name .. " has " .. challengedData.boardState.currentUnits .. " units on board")
 	
-	-- Search through all lobbies in workspace
-	for _, lobby in pairs(game.Workspace:GetChildren()) do
-		if lobby.Name:find("Lobby_") then
-			local spawnPoints = lobby:FindFirstChild("SpawnPoints")
-			if spawnPoints then
-				local playerArena = spawnPoints:FindFirstChild(tostring(challengedPlayer.UserId))
-				if playerArena then
-					challengedArena = playerArena
-					break
-				end
-			end
-		end
-	end
-	
+	-- Find the challenged player's arena using the helper function
+	local challengedArena = PVPChallengeManager.findPlayerArena(challengedPlayer.UserId)
 	if not challengedArena then
-		warn("Could not find challenged player's arena")
+		warn("Could not find challenged player's arena for " .. challengedPlayer.Name)
 		return
 	end
+	
+	-- Ensure the arena has the required battle components
+	PVPChallengeManager.ensureArenaBattleComponents(challengedArena, challengedPlayer.Name)
 	
 	-- Get the enemy unit board
 	local enemyUnitBoard = challengedArena:FindFirstChild("Enemy Unit Board")
 	if not enemyUnitBoard then
-		warn("Could not find Enemy Unit Board in challenged player's arena")
+		warn("Could not find Enemy Unit Board in challenged player's arena after ensuring components")
 		return
 	end
 	
@@ -351,11 +433,13 @@ function PVPChallengeManager.populateBattleBoards(challengerPlayer: Player, chal
 	-- Update challenged player's board with their current PVP board state
 	-- This will be handled by the client when they receive the battle start signal
 	
-	print("Populated battle boards for both players")
+	print("Battle boards populated successfully")
 end
 
 -- Populate enemy board with challenger's units
 function PVPChallengeManager.populateEnemyBoard(enemyBoard: Instance, boardState: any)
+	print("Populating enemy board with challenger's units...")
+	
 	-- Clear existing enemy units
 	for _, child in pairs(enemyBoard:GetChildren()) do
 		if child:IsA("Model") and child.Name:find("EnemyUnit_") then
@@ -364,37 +448,89 @@ function PVPChallengeManager.populateEnemyBoard(enemyBoard: Instance, boardState
 	end
 	
 	-- Place challenger's units on the enemy board
+	local unitsPlaced = 0
 	for position, unit in pairs(boardState.grid) do
 		if position and unit then
 			PVPChallengeManager.placeEnemyUnit(enemyBoard, unit, position)
+			unitsPlaced = unitsPlaced + 1
 		end
 	end
+	
+	print("Placed " .. unitsPlaced .. " enemy units on the board")
 end
 
 -- Place a single enemy unit on the board
 function PVPChallengeManager.placeEnemyUnit(enemyBoard: Instance, unit: any, position: Vector2)
 	-- Find the appropriate hex on the enemy board
+	-- Convert from 0-based coordinates to 1-based hex names
 	local hexName = string.format("Hex_%d_%d", position.Y + 1, position.X + 1)
 	local hex = enemyBoard:FindFirstChild(hexName)
 	
 	if hex then
-		-- Create a simple enemy unit model (placeholder for now)
-		local enemyUnit = Instance.new("Model")
-		enemyUnit.Name = "EnemyUnit_" .. unit.id
-		enemyUnit.Parent = enemyBoard
+		-- Get the actual unit model from UnitSpawner
+		local UnitSpawner = require(script.Parent.UnitSpawner)
+		local unitModel = UnitSpawner.getUnitModel(unit.name)
 		
-		-- Create a simple part to represent the unit
-		local part = Instance.new("Part")
-		part.Name = "UnitPart"
-		part.Size = Vector3.new(2, 2, 2)
-		part.BrickColor = BrickColor.new("Bright red")
-		part.Material = Enum.Material.Neon
-		part.Parent = enemyUnit
-		
-		-- Position the unit at the hex location
-		part.CFrame = hex.CFrame + Vector3.new(0, 2, 0)
-		
-		print("Placed enemy unit " .. unit.name .. " at position " .. tostring(position))
+		if unitModel then
+			-- Clone the actual unit model
+			local enemyUnit = unitModel:Clone()
+			enemyUnit.Name = "EnemyUnit_" .. unit.id
+			enemyUnit.Parent = hex
+			
+			-- Scale unit based on tier
+			local UnitDatabase = require(game.ReplicatedStorage.Shared.UnitDatabase)
+			local sizeScale = UnitDatabase.calculateUnitSizeScale(unit.tier)
+			
+			-- Scale the entire model uniformly
+			local originalPivot = enemyUnit:GetPivot()
+			for _, part in pairs(enemyUnit:GetDescendants()) do
+				if part:IsA("BasePart") then
+					-- Scale the part size
+					part.Size = part.Size * sizeScale
+					
+					-- Scale the part's position relative to the model's pivot
+					local relativePosition = part.Position - originalPivot.Position
+					part.Position = originalPivot.Position + (relativePosition * sizeScale)
+				end
+			end
+			
+			-- Position the unit at the hex location
+			local hexCFrame = hex.CFrame
+			local unitSize = enemyUnit:GetExtentsSize()
+			local unitHeight = unitSize.Y
+			local heightOffset = unitHeight / 2
+			
+			-- Create CFrame with position and rotation to face forward
+			local adjustedCFrame = CFrame.new(hexCFrame.Position + Vector3.new(0, heightOffset, 0)) * CFrame.Angles(0, 0, 0)
+			enemyUnit:PivotTo(adjustedCFrame)
+			
+			-- Store unit data in the model
+			enemyUnit:SetAttribute("UnitId", unit.id)
+			enemyUnit:SetAttribute("UnitName", unit.name)
+			enemyUnit:SetAttribute("UnitTier", unit.tier)
+			enemyUnit:SetAttribute("PositionX", position.X)
+			enemyUnit:SetAttribute("PositionY", position.Y)
+			
+			print("Placed actual enemy unit " .. unit.name .. " at hex " .. hexName .. " (position " .. tostring(position) .. ")")
+		else
+			warn("Could not find unit model for " .. unit.name .. " - using placeholder")
+			-- Fallback to simple placeholder if unit model not found
+			local enemyUnit = Instance.new("Model")
+			enemyUnit.Name = "EnemyUnit_" .. unit.id
+			enemyUnit.Parent = hex
+			
+			local part = Instance.new("Part")
+			part.Name = "UnitPart"
+			part.Size = Vector3.new(2, 2, 2)
+			part.BrickColor = BrickColor.new("Bright red")
+			part.Material = Enum.Material.Neon
+			part.Parent = enemyUnit
+			
+			part.CFrame = hex.CFrame + Vector3.new(0, 2, 0)
+			print("Placed placeholder enemy unit " .. unit.name .. " at hex " .. hexName)
+		end
+	else
+		warn("Could not find hex " .. hexName .. " on enemy board for unit " .. unit.name)
 	end
 end
 
