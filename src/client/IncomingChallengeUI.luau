@@ -55,7 +55,7 @@ local function getIncomingChallengePromptTemplate()
 end
 
 -- Create a new notification
-function IncomingChallengeUI.createNotification(challengerId: number, challengerName: string)
+function IncomingChallengeUI.createNotification(challengerId: number, challengerName: string, challengerLevel: number?)
 	print("IncomingChallengeUI.createNotification called for:", challengerName, "ID:", challengerId)
 	
 	-- Get the container frame (this will create ScreenGui if needed)
@@ -85,6 +85,14 @@ function IncomingChallengeUI.createNotification(challengerId: number, challenger
 	local label = notificationFrame:FindFirstChild("IncomingChallengeLabel")
 	if label then
 		label.Text = "Challenge from " .. challengerName
+	end
+	
+	-- Update the challenger level label if it exists
+	local challengerLevelLabel = notificationFrame:FindFirstChild("ChallengerLevelLabel")
+	if challengerLevelLabel and challengerLevel then
+		challengerLevelLabel.Text = "Level " .. challengerLevel
+	elseif challengerLevelLabel then
+		challengerLevelLabel.Text = "Level 1" -- Default level if not provided
 	end
 	
 	-- Calculate position for stacking within the 0.2 wide frame
@@ -247,9 +255,9 @@ function IncomingChallengeUI.init()
 	local showChallengeRequestEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.SHOW_CHALLENGE_REQUEST)
 	print("ShowChallengeRequest event found:", showChallengeRequestEvent.Name)
 	
-	showChallengeRequestEvent.OnClientEvent:Connect(function(challengerId, challengerName)
-		print("Received ShowChallengeRequest event - Challenger ID:", challengerId, "Name:", challengerName)
-		IncomingChallengeUI.createNotification(challengerId, challengerName)
+	showChallengeRequestEvent.OnClientEvent:Connect(function(challengerId, challengerName, challengerLevel)
+		print("Received ShowChallengeRequest event - Challenger ID:", challengerId, "Name:", challengerName, "Level:", challengerLevel)
+		IncomingChallengeUI.createNotification(challengerId, challengerName, challengerLevel)
 	end)
 	
 	print("Incoming Challenge UI initialized successfully")

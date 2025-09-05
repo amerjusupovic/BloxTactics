@@ -11,6 +11,7 @@ local _UserInputService = game:GetService("UserInputService")
 -- Load shared modules
 local Constants = require(game.ReplicatedStorage.Shared.Constants)
 local DataStructures = require(game.ReplicatedStorage.Shared.DataStructures)
+local UnitMovement = require(game.ReplicatedStorage.Shared.UnitMovement)
 
 local PVPChallengeUI = {}
 
@@ -24,6 +25,8 @@ local countdownTimer = nil
 -- PVP state storage
 local currentPVPBoardState = nil
 local currentPVPBenchState = nil
+
+-- Unit selection state is now handled by UnitMovement module
 
 -- ScreenGui containers
 local pvpFramesScreenGui = nil
@@ -95,121 +98,21 @@ function PVPChallengeUI.createPVPFrames()
 	pvpBoardFrame.Visible = false
 	pvpBenchFrame.Visible = false
 	
-	-- Create board hexes for PVP frames
-	PVPChallengeUI.createPVPBoardHexes()
-	PVPChallengeUI.createPVPBenchHexes()
+	-- Create board hexes for PVP frames using shared module
+	UnitMovement.createBoardHexes(pvpBoardFrame, function(hex, position)
+		UnitMovement.handleHexClick(hex, position, PVPChallengeUI.requestUnitMove, "PVP board")
+	end, "PVP board")
+	
+	-- Create bench hexes for PVP frames using shared module
+	UnitMovement.createBenchHexes(pvpBenchFrame, function(hex, position)
+		UnitMovement.handleHexClick(hex, position, PVPChallengeUI.requestUnitMove, "PVP bench")
+	end, "PVP bench")
 	
 	print("DEBUG: PVP frames created successfully with ScreenGui")
 	return pvpBoardFrame, pvpBenchFrame
 end
 
--- Create PVP board hexes
-function PVPChallengeUI.createPVPBoardHexes()
-	if not pvpBoardFrame then return end
-	
-	-- Grid size
-	local rows = Constants.BOARD_HEIGHT
-	local cols = Constants.BOARD_WIDTH
-	
-	-- Hex size (as scale of parent container)
-	local hexWidth = 0.13
-	local hexHeight = 0.22
-	local aspectRatio = 0.92
-	
-	-- Offset (half a hex width)
-	local offsetX = hexWidth / 2
-	local titleHeightOffset = 0.05
-	
-	-- Compute total board width/height in scale
-	local boardWidth = (cols - 1) * hexWidth + hexWidth + offsetX
-	local boardHeight = hexHeight + (rows - 1) * (hexHeight * 0.85)
-	
-	-- Compute margins to center
-	local marginX = (1 - (boardWidth - 0.04)) / 2
-	local marginY = (1 - (boardHeight - titleHeightOffset)) / 2
-	
-	for row = 1, rows do
-		for col = 1, cols do
-			local hex = Instance.new("ImageButton")
-			hex.Size = UDim2.new(hexWidth, 0, hexHeight, 0)
-			hex.BackgroundTransparency = 1
-			hex.Image = "rbxassetid://135628423497794"
-			
-			-- Convert to bottom-up coordinate system for hex naming
-			local bottomUpRow = rows - row + 1
-			hex.Name = string.format("Hex_%d_%d", bottomUpRow, col)
-			
-			-- Aspect ratio lock
-			local constraint = Instance.new("UIAspectRatioConstraint")
-			constraint.AspectRatio = aspectRatio
-			constraint.Parent = hex
-			
-			-- Base pos
-			local posX = (col - 1) * hexWidth
-			local posY = (row - 1) * (hexHeight * 0.88)
-			
-			-- Row offset
-			if row % 2 == 0 then
-				posX = posX + offsetX
-			end
-			
-			-- Apply centering margin
-			posX = posX + marginX
-			posY = posY + marginY
-			
-			hex.Position = UDim2.new(posX, 0, posY, 0)
-			hex.Parent = pvpBoardFrame
-		end
-	end
-end
-
--- Create PVP bench hexes
-function PVPChallengeUI.createPVPBenchHexes()
-	if not pvpBenchFrame then return end
-	
-	-- Grid size (bench is 1 row, 6 columns)
-	local benchCols = Constants.BENCH_CAPACITY
-	
-	-- Hex size (as scale of parent container)
-	local benchHexWidth = 0.13
-	local benchHexHeight = 0.55
-	local benchAspectRatio = 0.92
-	
-	-- Compute total bench width/height in scale
-	local benchWidth = benchCols * benchHexWidth
-	local benchHeight = benchHexHeight
-	
-	-- Calculate bench title height offset
-	local benchTitleHeightOffset = 0.1
-	
-	-- Compute margins to center in BenchFrame
-	local benchMarginX = (1 - (benchWidth - 0.04)) / 2
-	local benchMarginY = (1 - (benchHeight - benchTitleHeightOffset)) / 2
-	
-	for col = 1, benchCols do
-		local hex = Instance.new("ImageButton")
-		hex.Size = UDim2.new(benchHexWidth, 0, benchHexHeight, 0)
-		hex.BackgroundTransparency = 1
-		hex.Image = "rbxassetid://135628423497794"
-		hex.Name = string.format("BenchHex_%d", col)
-		
-		-- Aspect ratio lock
-		local constraint = Instance.new("UIAspectRatioConstraint")
-		constraint.AspectRatio = benchAspectRatio
-		constraint.Parent = hex
-		
-		-- Position (no staggering needed)
-		local posX = (col - 1) * benchHexWidth
-		local posY = 0
-		
-		-- Apply centering margin
-		posX = posX + benchMarginX
-		posY = posY + benchMarginY
-		
-		hex.Position = UDim2.new(posX, 0, posY, 0)
-		hex.Parent = pvpBenchFrame
-	end
-end
+-- PVP board and bench hexes are now created using the shared UnitMovement module
 
 -- Show PVP frames with board and bench data
 function PVPChallengeUI.showPVPFrames(boardState: DataStructures.BoardState, benchState: DataStructures.BenchState)
@@ -255,6 +158,9 @@ function PVPChallengeUI.hidePVPFrames()
 	if pvpCountdownLabel then
 		pvpCountdownLabel.Visible = false
 	end
+	
+	-- Clear selection when hiding frames
+	UnitMovement.clearSelection()
 end
 
 -- Update PVP board display
@@ -262,6 +168,9 @@ function PVPChallengeUI.updatePVPBoardDisplay(boardState: DataStructures.BoardSt
 	if not pvpBoardFrame or not boardState or not boardState.grid then
 		return
 	end
+	
+	-- Clear selection when board is updated
+	UnitMovement.clearSelection()
 	
 	-- Clear existing units
 	for _, child in pairs(pvpBoardFrame:GetChildren()) do
@@ -369,26 +278,8 @@ function PVPChallengeUI.placeUnitOnPVPBoard(unit: DataStructures.Unit, position:
 	local hex = pvpBoardFrame:FindFirstChild(hexName)
 	
 	if hex then
-		-- Create unit visual
-		local unitVisual = Instance.new("ImageButton")
-		unitVisual.Size = UDim2.new(0.8, 0, 0.8, 0)
-		unitVisual.Position = UDim2.new(0.1, 0, 0, 0)
-		unitVisual.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-		unitVisual.BorderSizePixel = 0
-		unitVisual.Image = unit.imageAssetId
-		unitVisual.Parent = hex
-		
-		-- Create tier label overlay
-		local tierLabel = Instance.new("TextLabel")
-		tierLabel.Size = UDim2.new(0.3, 0, 0.3, 0)
-		tierLabel.Position = UDim2.new(0.7, 0, 0.7, 0)
-		tierLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-		tierLabel.BackgroundTransparency = 0.3
-		tierLabel.Text = "T" .. unit.tier
-		tierLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-		tierLabel.TextScaled = true
-		tierLabel.Font = Enum.Font.GothamBold
-		tierLabel.Parent = unitVisual
+		-- Create unit visual using shared module
+		local _unitVisual = UnitMovement.createUnitVisual(hex, unit, x, y, nil, "PVP board")
 	end
 end
 
@@ -402,26 +293,8 @@ function PVPChallengeUI.placeUnitOnPVPBench(unit: DataStructures.Unit, benchSlot
 	local hex = pvpBenchFrame:FindFirstChild(hexName)
 	
 	if hex then
-		-- Create unit visual
-		local unitVisual = Instance.new("ImageButton")
-		unitVisual.Size = UDim2.new(0.8, 0, 0.8, 0)
-		unitVisual.Position = UDim2.new(0.1, 0, 0, 0)
-		unitVisual.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-		unitVisual.BorderSizePixel = 0
-		unitVisual.Image = unit.imageAssetId
-		unitVisual.Parent = hex
-		
-		-- Create tier label overlay
-		local tierLabel = Instance.new("TextLabel")
-		tierLabel.Size = UDim2.new(0.3, 0, 0.3, 0)
-		tierLabel.Position = UDim2.new(0.7, 0, 0.7, 0)
-		tierLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-		tierLabel.BackgroundTransparency = 0.3
-		tierLabel.Text = "T" .. unit.tier
-		tierLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-		tierLabel.TextScaled = true
-		tierLabel.Font = Enum.Font.GothamBold
-		tierLabel.Parent = unitVisual
+		-- Create unit visual using shared module
+		local _unitVisual = UnitMovement.createUnitVisual(hex, unit, nil, nil, benchSlot, "PVP bench")
 	end
 end
 
@@ -501,6 +374,16 @@ function PVPChallengeUI.getCurrentPVPBenchState()
 	return currentPVPBenchState
 end
 
+-- Function to request unit move from server (used by shared UnitMovement module)
+function PVPChallengeUI.requestUnitMove(unit: any, fromPosition: Vector2, toPosition: Vector2)
+	local moveUnitEvent = game.ReplicatedStorage.RemoteEvents:WaitForChild("MoveUnit")
+	if moveUnitEvent then
+		moveUnitEvent:FireServer(fromPosition, toPosition)
+	else
+		warn("MoveUnit RemoteEvent not found!")
+	end
+end
+
 
 -- Challenge another player
 function PVPChallengeUI.challengePlayer(targetPlayerId: number)
@@ -526,6 +409,16 @@ function PVPChallengeUI.init()
 		currentChallengeId = challengeId
 		PVPChallengeUI.showPVPFrames(boardState, benchState)
 		PVPChallengeUI.startPVPCountdown(countdownTime)
+	end)
+	
+	-- Handle PVP frames update
+	local updatePVPFramesEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.UPDATE_PVP_FRAMES)
+	updatePVPFramesEvent.OnClientEvent:Connect(function(boardState, benchState)
+		print("DEBUG: Received PVP frames update event")
+		-- Update the PVP frames with the new board and bench state
+		PVPChallengeUI.updatePVPBoardDisplay(boardState)
+		PVPChallengeUI.updatePVPBenchDisplay(benchState)
+		print("DEBUG: Updated PVP frames with new state")
 	end)
 	
 	-- Handle battle start

@@ -101,7 +101,13 @@ function PVPChallengeManager.createChallenge(challengerId: number, challengedId:
 		-- Send challenge request UI
 		local challengeRequestEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_CHALLENGE_REQUEST)
 		print("Firing ShowChallengeRequest event to player:", challengedPlayer.Name)
-		challengeRequestEvent:FireClient(challengedPlayer, challengerId, challengerName)
+		
+		-- Get challenger's level from player data
+		local PlayerDataManager = require(script.Parent.PlayerData)
+		local challengerData = PlayerDataManager.getPlayerData(challengerId)
+		local challengerLevel = challengerData and challengerData.level or 1
+		
+		challengeRequestEvent:FireClient(challengedPlayer, challengerId, challengerName, challengerLevel)
 		print("ShowChallengeRequest event fired successfully")
 	else
 		warn("Challenged player not found for ID:", challengedId)
@@ -459,6 +465,33 @@ function PVPChallengeManager.getPlayerChallenge(playerId: number): any?
 	end
 	
 	return activeChallenges[challengeId]
+end
+
+-- Update PVP frames for a player if they're in a challenge
+function PVPChallengeManager.updatePVPFramesForPlayer(playerId: number)
+	local challenge = PVPChallengeManager.getPlayerChallenge(playerId)
+	if not challenge or challenge.status ~= "accepted" then
+		-- Player is not in an active challenge, no need to update PVP frames
+		return
+	end
+	
+	local player = Players:GetPlayerByUserId(playerId)
+	if not player then
+		return
+	end
+	
+	-- Get current player data
+	local PlayerDataManager = require(script.Parent.PlayerData)
+	local playerData = PlayerDataManager.getPlayerData(playerId)
+	if not playerData then
+		return
+	end
+	
+	-- Send updated PVP frames to the player
+	local updatePVPFramesEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.UPDATE_PVP_FRAMES)
+	updatePVPFramesEvent:FireClient(player, playerData.boardState, playerData.benchState)
+	
+	print("Updated PVP frames for player:", player.Name, "in challenge:", challenge.challengerId .. "_" .. challenge.challengedId)
 end
 
 -- Check for expired challenges and clean them up

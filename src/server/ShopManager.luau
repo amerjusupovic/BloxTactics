@@ -412,23 +412,32 @@ function ShopManager.handleUnitMove(userId: number, fromPosition: Vector2, toPos
 	print("  fromPosition:", fromPosition, "fromBench:", fromBench)
 	print("  toPosition:", toPosition, "toBench:", toBench)
 	
+	local success = false
 	if fromBench and toBench then
 		-- Bench to Bench movement
 		print("  Detected: Bench to Bench movement")
-		return ShopManager.handleBenchToBenchMove(userId, fromPosition, toPosition)
+		success = ShopManager.handleBenchToBenchMove(userId, fromPosition, toPosition)
 	elseif fromBench and not toBench then
 		-- Bench to Board movement
 		print("  Detected: Bench to Board movement")
-		return ShopManager.handleBenchToBoardMove(userId, fromPosition, toPosition)
+		success = ShopManager.handleBenchToBoardMove(userId, fromPosition, toPosition)
 	elseif not fromBench and toBench then
 		-- Board to Bench movement
 		print("  Detected: Board to Bench movement")
-		return ShopManager.handleBoardToBenchMove(userId, fromPosition, toPosition)
+		success = ShopManager.handleBoardToBenchMove(userId, fromPosition, toPosition)
 	else
 		-- Board to Board movement
 		print("  Detected: Board to Board movement")
-		return ShopManager.handleBoardToBoardMove(userId, fromPosition, toPosition)
+		success = ShopManager.handleBoardToBoardMove(userId, fromPosition, toPosition)
 	end
+	
+	-- If the move was successful, update PVP frames if the player is in a challenge
+	if success then
+		local PVPChallengeManager = require(script.Parent.PVPChallengeManager)
+		PVPChallengeManager.updatePVPFramesForPlayer(userId)
+	end
+	
+	return success
 end
 
 -- Function to handle board-to-board movement

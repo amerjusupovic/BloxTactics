@@ -76,6 +76,7 @@ Constants.REMOTE_EVENT_NAMES = {
 	SHOW_CHALLENGE_PROMPT = "ShowChallengePrompt",
 	HIDE_CHALLENGE_PROMPT = "HideChallengePrompt",
 	SHOW_PVP_FRAMES = "ShowPVPFrames",
+	UPDATE_PVP_FRAMES = "UpdatePVPFrames",
 	UPDATE_BOARD = "UpdateBoard",
 	UPDATE_PLAYER_DATA = "UpdatePlayerData",
 	UPDATE_SHOP = "UpdateShop",
