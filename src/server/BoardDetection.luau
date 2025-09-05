@@ -4,7 +4,7 @@
 ]]
 
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local _ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RemoteEvents = require(script.Parent.RemoteEvents)
 local Constants = require(game.ReplicatedStorage.Shared.Constants)
 
@@ -37,7 +37,7 @@ function BoardDetection.createBoardArea(playerId: number, playerName: string, lo
 	-- Create a detection zone around the board
 	local detectionZone = Instance.new("Part")
 	detectionZone.Name = "BoardDetectionZone"
-	detectionZone.Size = Vector3.new(120, 10, 120) -- 60 unit radius detection zone, thinner height for better positioning
+	detectionZone.Size = Constants.BOARD_DETECTION_ZONE_SIZE
 	
 	-- Get the position of the arena (handle both Model and Folder cases)
 	local arenaPosition
@@ -55,14 +55,18 @@ function BoardDetection.createBoardArea(playerId: number, playerName: string, lo
 		end
 	end
 	
-	-- Position the zone at character height (5 units above ground)
-	detectionZone.Position = Vector3.new(arenaPosition.X, 5, arenaPosition.Z)
+	-- Position the zone at character height with forward offset
+	detectionZone.Position = Vector3.new(
+		arenaPosition.X, 
+		Constants.BOARD_DETECTION_ZONE_HEIGHT, 
+		arenaPosition.Z + Constants.BOARD_DETECTION_ZONE_FORWARD_OFFSET
+	)
 	detectionZone.Anchored = true
 	detectionZone.CanCollide = false
 	detectionZone.Transparency = 1 -- Invisible
 	detectionZone.Parent = grassArena
 	
-	print("Created detection zone for player " .. playerName .. " at position " .. tostring(arenaPosition))
+	print("Created detection zone for player " .. playerName .. " at position " .. tostring(detectionZone.Position) .. " with radius " .. Constants.BOARD_DETECTION_ZONE_RADIUS)
 	
 	-- Create a folder to store the detection zone
 	local boardArea = Instance.new("Folder")
@@ -92,13 +96,13 @@ function BoardDetection.setupDetectionZone(detectionZone: Part, boardOwnerId: nu
 		local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
 		if not humanoidRootPart then return false end
 		
-		-- Check if player is within the circular detection zone (60 unit radius)
+		-- Check if player is within the circular detection zone
 		local playerPos = humanoidRootPart.Position
 		local zonePos = detectionZone.Position
 		
 		-- Calculate distance from zone center
 		local distance = (playerPos - zonePos).Magnitude
-		local radius = 60 -- 60 unit radius as requested
+		local radius = Constants.BOARD_DETECTION_ZONE_RADIUS
 		
 		return distance <= radius
 	end
