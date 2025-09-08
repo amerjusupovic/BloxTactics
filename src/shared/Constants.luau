@@ -58,7 +58,7 @@ Constants.GROUND_LEVEL = 0
 Constants.ARENA_SPACING = 300
 Constants.LOBBY_SPACING = 2000
 Constants.MAX_PLAYERS_PER_LOBBY = 6
-Constants.PLAYER_SPAWN_FORWARD_OFFSET = -50 
+Constants.PLAYER_SPAWN_FORWARD_OFFSET = -120 
 
 -- Board Detection constants
 Constants.BOARD_DETECTION_ZONE_SIZE = Vector3.new(180, 10, 180) -- 90 unit radius detection zone

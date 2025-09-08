@@ -360,9 +360,8 @@ function PVPChallengeUI.startPVPCountdown(duration: number)
 			-- Move the frame completely off-screen by setting X scale to -1 (or more negative)
 			local targetX = -2.05 -- Move completely off-screen to the left
 			
-			-- Smooth animation using easing
-			local easedProgress = 1 - math.pow(1 - progress, 3) -- Ease-out cubic
-			local currentX = initialPosition.X.Scale + (targetX - initialPosition.X.Scale) * easedProgress
+			-- Linear animation for consistent speed
+			local currentX = initialPosition.X.Scale + (targetX - initialPosition.X.Scale) * progress
 			
 			battleCountdownVisual.Position = UDim2.new(currentX, initialPosition.X.Offset, initialPosition.Y.Scale, initialPosition.Y.Offset)
 		end
