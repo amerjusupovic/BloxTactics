@@ -21,6 +21,8 @@ local pvpBenchFrame = nil
 local pvpCountdownLabel = nil
 local currentChallengeId = nil
 local countdownTimer = nil
+local battleCountdownVisual = nil
+local originalCountdownVisualPosition = nil
 
 -- PVP state storage
 local currentPVPBoardState = nil
@@ -82,6 +84,20 @@ function PVPChallengeUI.createPVPFrames()
 	pvpBoardFrame = templatePVPBoardFrame:Clone()
 	pvpBenchFrame = templatePVPBenchFrame:Clone()
 	
+	-- Find and store the BattleCountdownVisual frame
+	battleCountdownVisual = pvpBenchFrame:FindFirstChild("BattleCountdownVisual")
+	if battleCountdownVisual then
+		originalCountdownVisualPosition = battleCountdownVisual.Position
+		print("DEBUG: Found BattleCountdownVisual and stored original position")
+	else
+		warn("DEBUG: BattleCountdownVisual not found in PVPBenchFrame!")
+		-- List available children for debugging
+		print("Available children in PVPBenchFrame:")
+		for _, child in pairs(pvpBenchFrame:GetChildren()) do
+			print("  - " .. child.Name .. " (" .. child.ClassName .. ")")
+		end
+	end
+	
 	-- Parent frames to ScreenGui
 	pvpBoardFrame.Parent = pvpFramesScreenGui
 	pvpBenchFrame.Parent = pvpFramesScreenGui
@@ -133,6 +149,12 @@ function PVPChallengeUI.showPVPFrames(boardState: DataStructures.BoardState, ben
 	PVPChallengeUI.updatePVPBenchDisplay(benchState)
 	print("DEBUG: Updated PVP board and bench displays")
 	
+	-- Reset BattleCountdownVisual position to original before showing
+	if battleCountdownVisual and originalCountdownVisualPosition then
+		battleCountdownVisual.Position = originalCountdownVisualPosition
+		print("DEBUG: Reset BattleCountdownVisual to original position")
+	end
+	
 	-- Show the frames
 	pvpBoardFrame.Visible = true
 	pvpBenchFrame.Visible = true
@@ -154,6 +176,8 @@ function PVPChallengeUI.hidePVPFrames()
 	end
 	if pvpBenchFrame then
 		pvpBenchFrame.Visible = false
+		-- Reset position when hiding frames
+		-- This will be restored when frames are shown again
 	end
 	if pvpCountdownLabel then
 		pvpCountdownLabel.Visible = false
@@ -309,6 +333,15 @@ function PVPChallengeUI.startPVPCountdown(duration: number)
 	
 	local timeRemaining = duration
 	local lastUpdateTime = tick()
+	local startTime = tick()
+	
+	-- Use stored original position for animation
+	local initialPosition = originalCountdownVisualPosition
+	if initialPosition then
+		print("DEBUG: Using original BattleCountdownVisual position for animation: " .. tostring(initialPosition))
+	else
+		warn("DEBUG: No original position stored for BattleCountdownVisual animation!")
+	end
 	
 	-- Update the countdown label immediately
 	if pvpCountdownLabel then
@@ -317,6 +350,22 @@ function PVPChallengeUI.startPVPCountdown(duration: number)
 	
 	countdownTimer = game:GetService("RunService").Heartbeat:Connect(function()
 		local currentTime = tick()
+		local elapsedTime = currentTime - startTime
+		
+		-- Animate BattleCountdownVisual moving left over the duration
+		if battleCountdownVisual and initialPosition then
+			local progress = math.min(elapsedTime / duration, 1) -- Progress from 0 to 1
+			
+			-- Calculate target position (completely off-screen to the left)
+			-- Move the frame completely off-screen by setting X scale to -1 (or more negative)
+			local targetX = -2.05 -- Move completely off-screen to the left
+			
+			-- Smooth animation using easing
+			local easedProgress = 1 - math.pow(1 - progress, 3) -- Ease-out cubic
+			local currentX = initialPosition.X.Scale + (targetX - initialPosition.X.Scale) * easedProgress
+			
+			battleCountdownVisual.Position = UDim2.new(currentX, initialPosition.X.Offset, initialPosition.Y.Scale, initialPosition.Y.Offset)
+		end
 		
 		-- Only update every second
 		if currentTime - lastUpdateTime >= 1 then

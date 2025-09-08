@@ -36,56 +36,53 @@ function PVPChallengeManager.findPlayerArena(playerId: number): Instance?
 		if lobby.Name:find("Lobby_") then
 			local spawnPoints = lobby:FindFirstChild("SpawnPoints")
 			if spawnPoints then
-				local playerArena = spawnPoints:FindFirstChild(tostring(playerId))
-				if playerArena then
-					return playerArena
+				local playerFolder = spawnPoints:FindFirstChild(tostring(playerId))
+				if playerFolder then
+					-- Return any arena (child with "Arena" in the name), not just Grass Arena
+					for _, child in pairs(playerFolder:GetChildren()) do
+						if child.Name:find("Arena") then
+							print("DEBUG: Found arena '" .. child.Name .. "' for player " .. playerId)
+							return child
+						end
+					end
+					-- Debug: List all children if no arena found
+					warn("DEBUG: No arena found for player " .. playerId .. " in folder " .. playerFolder.Name)
+					warn("Available children in player folder:")
+					for _, child in pairs(playerFolder:GetChildren()) do
+						warn("  - " .. child.Name .. " (" .. child.ClassName .. ")")
+					end
+				else
+					warn("DEBUG: Player folder not found for player " .. playerId .. " in lobby " .. lobby.Name)
 				end
+			else
+				warn("DEBUG: SpawnPoints not found in lobby " .. lobby.Name)
 			end
 		end
 	end
+	warn("DEBUG: No arena found for player " .. playerId .. " in any lobby")
 	return nil
 end
 
--- Helper function to ensure arena has required battle components
+-- Helper function to check if arena has required battle components
 function PVPChallengeManager.ensureArenaBattleComponents(arena: Instance, playerName: string)
-	if not arena then return end
+	if not arena then 
+		warn("Arena is nil for player: " .. playerName)
+		return 
+	end
 	
-	-- Ensure Enemy Unit Board exists
+	-- Check if Enemy Unit Board exists
 	local enemyUnitBoard = arena:FindFirstChild("Enemy Unit Board")
 	if not enemyUnitBoard then
-		enemyUnitBoard = Instance.new("Folder")
-		enemyUnitBoard.Name = "Enemy Unit Board"
-		enemyUnitBoard.Parent = arena
-		
-		-- Create hexes for the enemy board (same structure as regular board)
-		for enemyRow = 1, 4 do
-			for enemyCol = 1, 7 do
-				local hex = Instance.new("Part")
-				hex.Name = string.format("Hex_%d_%d", enemyRow, enemyCol)
-				hex.Size = Vector3.new(4, 0.2, 4)
-				hex.Material = Enum.Material.Neon
-				hex.BrickColor = BrickColor.new("Bright red")
-				hex.Anchored = true
-				hex.CanCollide = false
-				hex.Transparency = 0.7
-				
-				-- Position hexes in a grid pattern
-				local hexPosition = Vector3.new(
-					(enemyCol - 4) * 5, -- Center around 0, spacing of 5
-					0.1, -- Slightly above ground
-					(enemyRow - 2.5) * 5 -- Center around 0, spacing of 5
-				)
-				
-				-- Offset for enemy board (to the right of the regular board)
-				hexPosition = hexPosition + Vector3.new(20, 0, 0)
-				
-				hex.Position = hexPosition
-				hex.Parent = enemyUnitBoard
-			end
+		warn("Enemy Unit Board not found in arena for player: " .. playerName)
+		warn("Arena name: " .. arena.Name .. ", Arena type: " .. arena.ClassName)
+		warn("Available children in arena:")
+		for _, child in pairs(arena:GetChildren()) do
+			warn("  - " .. child.Name .. " (" .. child.ClassName .. ")")
 		end
-		
-		print("Created missing Enemy Unit Board with hexes for player " .. playerName)
+		return
 	end
+	
+	print("Enemy Unit Board found for player: " .. playerName)
 end
 
 -- Check if player is already in a challenge
@@ -363,6 +360,9 @@ function PVPChallengeManager.teleportPlayersToBattle(challengerPlayer: Player, c
 			arenaCenter = Vector3.new(0, 5, 0)
 		end
 	end
+	
+	-- Add forward offset to the z value of arenaCenter
+	arenaCenter = Vector3.new(arenaCenter.X, arenaCenter.Y, arenaCenter.Z + Constants.PLAYER_SPAWN_FORWARD_OFFSET)
 	
 	-- Teleport challenger to challenged player's arena
 	if challengerPlayer.Character then
