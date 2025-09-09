@@ -4,7 +4,6 @@
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
 
 local UnitSpawner = {}
 
@@ -112,21 +111,8 @@ function UnitSpawner.spawnUnitOnBoard(userId: number, unit: any, position: Vecto
 	local UnitDatabase = require(game.ReplicatedStorage.Shared.UnitDatabase)
 	local sizeScale = UnitDatabase.calculateUnitSizeScale(unit.tier)
 	
-	-- Scale the entire model uniformly
-	-- Get the model's current pivot point
-	local originalPivot = spawnedUnit:GetPivot()
-	
-	-- Scale all parts in the model uniformly
-	for _, part in pairs(spawnedUnit:GetDescendants()) do
-		if part:IsA("BasePart") then
-			-- Scale the part size
-			part.Size = part.Size * sizeScale
-			
-			-- Scale the part's position relative to the model's pivot
-			local relativePosition = part.Position - originalPivot.Position
-			part.Position = originalPivot.Position + (relativePosition * sizeScale)
-		end
-	end
+	-- Scale the entire model using the top-level Scale property
+	spawnedUnit:ScaleTo(sizeScale)
 	
 	-- Position the unit at the hex location
 	-- Adjust Y position to be on top of the hex
@@ -207,21 +193,8 @@ function UnitSpawner.spawnUnitOnBench(userId: number, unit: any, benchSlot: numb
 	local UnitDatabase = require(game.ReplicatedStorage.Shared.UnitDatabase)
 	local sizeScale = UnitDatabase.calculateUnitSizeScale(unit.tier)
 	
-	-- Scale the entire model uniformly
-	-- Get the model's current pivot point
-	local originalPivot = spawnedUnit:GetPivot()
-	
-	-- Scale all parts in the model uniformly
-	for _, part in pairs(spawnedUnit:GetDescendants()) do
-		if part:IsA("BasePart") then
-			-- Scale the part size
-			part.Size = part.Size * sizeScale
-			
-			-- Scale the part's position relative to the model's pivot
-			local relativePosition = part.Position - originalPivot.Position
-			part.Position = originalPivot.Position + (relativePosition * sizeScale)
-		end
-	end
+	-- Scale the entire model using the top-level Scale property
+	spawnedUnit:ScaleTo(sizeScale)
 	
 	-- Position the unit at the bench location
 	-- Adjust Y position to be on top of the bench

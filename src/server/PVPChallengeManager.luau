@@ -324,8 +324,11 @@ function PVPChallengeManager.startBattle(challengeId: string): boolean
 	
 	-- Start the actual battle using BattleManager
 	local battleId = BattleManager.startBattle(challengeId, challenge.challengerId, challenge.challengedId, challengedArena, function(winnerId)
-		-- Battle end callback
-		PVPChallengeManager.endBattle(challengeId, winnerId)
+		-- Battle end callback - spawn to avoid blocking
+		spawn(function()
+			wait(1) -- Small delay to ensure battle state is properly updated
+			PVPChallengeManager.endBattle(challengeId, winnerId)
+		end)
 	end)
 	if not battleId then
 		warn("Failed to start battle for challenge: " .. challengeId)
@@ -506,18 +509,8 @@ function PVPChallengeManager.placeEnemyUnit(enemyBoard: Instance, unit: any, pos
 			local UnitDatabase = require(game.ReplicatedStorage.Shared.UnitDatabase)
 			local sizeScale = UnitDatabase.calculateUnitSizeScale(unit.tier)
 			
-			-- Scale the entire model uniformly
-			local originalPivot = enemyUnit:GetPivot()
-			for _, part in pairs(enemyUnit:GetDescendants()) do
-				if part:IsA("BasePart") then
-					-- Scale the part size
-					part.Size = part.Size * sizeScale
-					
-					-- Scale the part's position relative to the model's pivot
-					local relativePosition = part.Position - originalPivot.Position
-					part.Position = originalPivot.Position + (relativePosition * sizeScale)
-				end
-			end
+			-- Scale the entire model using the top-level Scale property
+			enemyUnit:ScaleTo(sizeScale)
 			
 			-- Position the unit at the hex location
 			local hexCFrame = hex.CFrame
