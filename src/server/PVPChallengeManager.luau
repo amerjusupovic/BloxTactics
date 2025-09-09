@@ -7,6 +7,7 @@ local Players = game:GetService("Players")
 local _ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RemoteEvents = require(script.Parent.RemoteEvents)
 local Constants = require(game.ReplicatedStorage.Shared.Constants)
+local BattleManager = require(script.Parent.BattleManager)
 
 local PVPChallengeManager = {}
 
@@ -19,9 +20,10 @@ local _ChallengeData = {
 	challengerId = nil,
 	challengedId = nil,
 	challengeTime = nil,
-	status = "pending", -- "pending", "accepted", "rejected", "expired"
+	status = "pending", -- "pending", "accepted", "rejected", "expired", "battling", "completed"
 	battlePreparationTime = nil,
-	battleStartTime = nil
+	battleStartTime = nil,
+	battleId = nil -- Reference to the battle in BattleManager
 }
 
 -- Generate unique challenge ID
@@ -103,8 +105,9 @@ function PVPChallengeManager.canPlayerBeChallenged(playerId: number): boolean
 	end
 	
 	-- Check if player is in a battle
-	-- This will be implemented when battle system is added
-	-- For now, assume they can be challenged
+	if BattleManager.isPlayerInBattle(playerId) then
+		return false
+	end
 	
 	return true
 end
@@ -132,7 +135,8 @@ function PVPChallengeManager.createChallenge(challengerId: number, challengedId:
 		challengeTime = os.time(),
 		status = "pending",
 		battlePreparationTime = nil,
-		battleStartTime = nil
+		battleStartTime = nil,
+		battleId = nil
 	}
 	
 	-- Store challenge
@@ -305,11 +309,32 @@ function PVPChallengeManager.startBattle(challengeId: string): boolean
 	
 	print("Starting battle between " .. challengerPlayer.Name .. " and " .. challengedPlayer.Name)
 	
+	-- Find the challenged player's arena
+	local challengedArena = PVPChallengeManager.findPlayerArena(challengedPlayer.UserId)
+	if not challengedArena then
+		warn("Could not find challenged player's arena for " .. challengedPlayer.Name)
+		return false
+	end
+	
 	-- Teleport both players to the challenged player's board
 	PVPChallengeManager.teleportPlayersToBattle(challengerPlayer, challengedPlayer)
 	
 	-- Populate both players' units on the board
 	PVPChallengeManager.populateBattleBoards(challengerPlayer, challengedPlayer)
+	
+	-- Start the actual battle using BattleManager
+	local battleId = BattleManager.startBattle(challengeId, challenge.challengerId, challenge.challengedId, challengedArena, function(winnerId)
+		-- Battle end callback
+		PVPChallengeManager.endBattle(challengeId, winnerId)
+	end)
+	if not battleId then
+		warn("Failed to start battle for challenge: " .. challengeId)
+		challenge.status = "accepted" -- Reset status
+		return false
+	end
+	
+	-- Store battle ID in challenge
+	challenge.battleId = battleId
 	
 	-- Notify both players that battle is starting
 	local battleStartEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
@@ -321,7 +346,7 @@ function PVPChallengeManager.startBattle(challengeId: string): boolean
 	startBattleEvent:FireClient(challengerPlayer, challengeId)
 	startBattleEvent:FireClient(challengedPlayer, challengeId)
 	
-	print("Battle started: " .. challengeId)
+	print("Battle started: " .. challengeId .. " with battle ID: " .. battleId)
 	return true
 end
 
@@ -534,8 +559,8 @@ function PVPChallengeManager.placeEnemyUnit(enemyBoard: Instance, unit: any, pos
 	end
 end
 
--- End battle and determine winner
-function PVPChallengeManager.endBattle(challengeId: string, winnerId: number): boolean
+-- End battle and determine winner (called by BattleManager)
+function PVPChallengeManager.endBattle(challengeId: string, winnerId: number?): boolean
 	local challenge = activeChallenges[challengeId]
 	if not challenge or challenge.status ~= "battling" then
 		return false
@@ -545,7 +570,7 @@ function PVPChallengeManager.endBattle(challengeId: string, winnerId: number): b
 	challenge.status = "completed"
 	
 	-- Determine winner and loser
-	local _loserId = (winnerId == challenge.challengerId) and challenge.challengedId or challenge.challengerId
+	local _loserId = winnerId and ((winnerId == challenge.challengerId) and challenge.challengedId or challenge.challengerId) or nil
 	
 	-- Calculate rewards (this will be implemented when battle system is added)
 	-- For now, just notify players
@@ -557,8 +582,10 @@ function PVPChallengeManager.endBattle(challengeId: string, winnerId: number): b
 		local battleEndEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
 		if winnerId == challenge.challengerId then
 			battleEndEvent:FireClient(challengerPlayer, "Victory! You won the battle!", 5)
-		else
+		elseif winnerId == challenge.challengedId then
 			battleEndEvent:FireClient(challengerPlayer, "Defeat! You lost the battle.", 5)
+		else
+			battleEndEvent:FireClient(challengerPlayer, "Draw! The battle ended in a tie.", 5)
 		end
 	end
 	
@@ -566,15 +593,17 @@ function PVPChallengeManager.endBattle(challengeId: string, winnerId: number): b
 		local battleEndEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
 		if winnerId == challenge.challengedId then
 			battleEndEvent:FireClient(challengedPlayer, "Victory! You won the battle!", 5)
-		else
+		elseif winnerId == challenge.challengerId then
 			battleEndEvent:FireClient(challengedPlayer, "Defeat! You lost the battle.", 5)
+		else
+			battleEndEvent:FireClient(challengedPlayer, "Draw! The battle ended in a tie.", 5)
 		end
 	end
 	
 	-- Clean up challenge
 	PVPChallengeManager.cleanupChallenge(challengeId)
 	
-	print("Battle ended: " .. challengeId .. " - Winner: " .. winnerId)
+	print("Battle ended: " .. challengeId .. " - Winner: " .. (winnerId or "Draw"))
 	return true
 end
 
