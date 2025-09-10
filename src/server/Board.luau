@@ -14,9 +14,22 @@ local Board = {}
 function Board.createBoardState(): BoardState
 	return {
 		grid = {},
-		maxUnits = Constants.MAX_BOARD_UNITS,
+		maxUnits = Constants.MAX_BOARD_UNITS, -- Will be updated based on player level
 		currentUnits = 0
 	}
+end
+
+-- Function to calculate max board units based on player level
+function Board.calculateMaxBoardUnits(playerLevel: number): number
+	-- Max units = level + 2, capped at 10 (reached at level 8)
+	return math.min(playerLevel + 2, 10)
+end
+
+-- Function to update board max units based on player level
+function Board.updateMaxUnits(boardState: BoardState, playerLevel: number)
+	if boardState then
+		boardState.maxUnits = Board.calculateMaxBoardUnits(playerLevel)
+	end
 end
 
 -- Function to check if a position is valid on the board

@@ -34,7 +34,7 @@ local function createDefaultPlayerData(userId: number, username: string): Player
 		items = {},
 		boardState = {
 			grid = {},
-			maxUnits = Constants.MAX_BOARD_UNITS,
+			maxUnits = 3, -- Level 1 + 2 = 3 units max
 			currentUnits = 0
 		},
 		benchState = {
@@ -70,6 +70,12 @@ function PlayerDataManager.loadPlayerData(userId: number, username: string): Pla
 				maxUnits = Constants.MAX_BOARD_UNITS,
 				currentUnits = 0
 			}
+		end
+		
+		-- Update board max units based on current level (for existing players)
+		if playerData.level then
+			local Board = require(script.Parent.Board)
+			Board.updateMaxUnits(playerData.boardState, playerData.level)
 		end
 		
 		if not playerData.benchState then

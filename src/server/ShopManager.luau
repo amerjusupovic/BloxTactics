@@ -141,6 +141,12 @@ function ShopManager.handleUnitPurchase(userId: number, shopIndex: number)
 	-- No tier-up possible, place normally
 	-- Check if bench has space
 	if Bench.isBenchFull(playerData.benchState) then
+		-- Check if board has capacity first
+		if Board.isBoardFull(playerData.boardState) then
+			ShopManager.sendNotification(userId, "Board is full! Max units: " .. playerData.boardState.maxUnits, 3)
+			return false
+		end
+		
 		-- Try to place on board
 		local availablePosition = Board.getAvailablePositions(playerData.boardState)[1]
 		if not availablePosition then
@@ -271,9 +277,14 @@ function ShopManager.checkAndPerformAutomaticCombinations(userId: number)
 					end
 				else
 					-- Try to place on board if bench is full
-					local availablePosition = Board.getAvailablePositions(playerData.boardState)[1]
-					if availablePosition and Board.placeUnit(playerData.boardState, newUnit, availablePosition) then
-						UnitSpawner.spawnUnitOnBoard(userId, newUnit, availablePosition)
+					if not Board.isBoardFull(playerData.boardState) then
+						local availablePosition = Board.getAvailablePositions(playerData.boardState)[1]
+						if availablePosition and Board.placeUnit(playerData.boardState, newUnit, availablePosition) then
+							UnitSpawner.spawnUnitOnBoard(userId, newUnit, availablePosition)
+						end
+					else
+						-- Board is full, unit is lost (this is expected behavior for auto-combinations)
+						print("Board is full, auto-combined unit " .. newUnit.name .. " was lost")
 					end
 				end
 				
@@ -712,28 +723,40 @@ function ShopManager.handleBenchToBoardMove(userId: number, fromPosition: Vector
 		if success then
 			print("Removed unit from bench slot", benchSlot)
 			
+			-- Check if board has capacity first
+			if Board.isBoardFull(playerData.boardState) then
+				-- Put the unit back on the bench since board is full
+				Bench.placeUnitInSlot(playerData.benchState, benchUnit, benchSlot)
+				ShopManager.sendNotification(userId, "Board is full! Max units: " .. playerData.boardState.maxUnits, 3)
+				return false
+			end
+			
 			-- Place unit on board
 			local placeSuccess = Board.placeUnit(playerData.boardState, benchUnit, toPosition)
 			if placeSuccess then
 				print("Placed unit on board at position", toPosition)
+				
+				-- Update physical units
+				UnitSpawner.removeUnitFromBench(userId, benchSlot)
+				UnitSpawner.spawnUnitOnBoard(userId, benchUnit, toPosition)
+				
+				-- Save player data
+				PlayerDataManager.savePlayerData(userId)
+				
+				-- Update client (send bench update first, then board update)
+				ShopManager.sendBenchUpdate(userId)
+				wait(0.1) -- Small delay to ensure bench update is processed first
+				ShopManager.sendBoardUpdate(userId)
+				ShopManager.sendNotification(userId, "Unit moved from bench to board!", 2)
+				
+				return true
 			else
 				print("Failed to place unit on board at position", toPosition)
+				-- Put the unit back on the bench since placement failed
+				Bench.placeUnitInSlot(playerData.benchState, benchUnit, benchSlot)
+				ShopManager.sendNotification(userId, "Cannot place unit at that position!", 3)
+				return false
 			end
-			
-			-- Update physical units
-			UnitSpawner.removeUnitFromBench(userId, benchSlot)
-			UnitSpawner.spawnUnitOnBoard(userId, benchUnit, toPosition)
-			
-			-- Save player data
-			PlayerDataManager.savePlayerData(userId)
-			
-			-- Update client (send bench update first, then board update)
-			ShopManager.sendBenchUpdate(userId)
-			wait(0.1) -- Small delay to ensure bench update is processed first
-			ShopManager.sendBoardUpdate(userId)
-			ShopManager.sendNotification(userId, "Unit moved from bench to board!", 2)
-			
-			return true
 		else
 			print("Failed to remove unit from bench slot", benchSlot)
 		end
@@ -894,9 +917,14 @@ function ShopManager.handleLevelUp(userId: number): boolean
 	ShopManager.sendShopToClient(userId)
 	ShopManager.sendNotification(userId, "Gained " .. Constants.LEVEL_UP_EXPERIENCE .. " experience! Cost: " .. Constants.LEVEL_UP_COST .. " gold", 2)
 	
-	-- If player leveled up, show special notification
+	-- If player leveled up, show special notification and update board max units
 	if levelGained > 0 then
+		-- Update board max units based on new level
+		local Board = require(script.Parent.Board)
+		Board.updateMaxUnits(newPlayerData.boardState, newPlayerData.level)
+		
 		ShopManager.sendNotification(userId, "Level up! You are now level " .. newPlayerData.level .. "!", 3)
+		ShopManager.sendNotification(userId, "Board capacity increased to " .. newPlayerData.boardState.maxUnits .. " units!", 3)
 	end
 	
 	-- Send updated player data to client
@@ -948,11 +976,15 @@ function ShopManager.performTierUp(userId: number, purchasedUnit: any, targetTie
 		return true
 	else
 		-- Try to place on board if bench is full
-		local availablePosition = Board.getAvailablePositions(playerData.boardState)[1]
-		if availablePosition and Board.placeUnit(playerData.boardState, newUnit, availablePosition) then
-			UnitSpawner.spawnUnitOnBoard(userId, newUnit, availablePosition)
-			return true
+		if not Board.isBoardFull(playerData.boardState) then
+			local availablePosition = Board.getAvailablePositions(playerData.boardState)[1]
+			if availablePosition and Board.placeUnit(playerData.boardState, newUnit, availablePosition) then
+				UnitSpawner.spawnUnitOnBoard(userId, newUnit, availablePosition)
+				return true
+			end
 		end
+		-- Board is full, tier-up failed
+		return false
 	end
 	
 	return false

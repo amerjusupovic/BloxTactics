@@ -48,15 +48,21 @@ local BattleUnit = {
 -- Active battles storage
 local activeBattles = {} -- {battleId = BattleData}
 
+-- Hex reservation system to prevent multiple units from moving to the same hex
+local reservedHexes = {} -- {hexName = unitId}
+
 -- Battle constants
 local BATTLE_CONSTANTS = {
-	UNIT_MOVEMENT_SPEED = 8, -- studs per second (slower movement)
+	UNIT_MOVEMENT_SPEED = 4, -- studs per second (slower movement)
 	ATTACK_RANGE_BUFFER = 2, -- Extra range buffer for melee units
 	BATTLE_TIMEOUT = 300, -- 5 minutes max battle time
 	RESET_DELAY = 5, -- 5 seconds before resetting units
 	HEX_SIZE = 4, -- Size of each hex in studs
 	UNIT_HEIGHT_OFFSET = 2, -- Height offset for units above hexes
-	ATTACK_SPEED_MULTIPLIER = 0.5 -- Slow down attack speed by 50%
+	ATTACK_SPEED_MULTIPLIER = 0.5, -- Slow down attack speed by 50%
+	MOVEMENT_COOLDOWN = 3, -- Seconds between hex movements (increased)
+	HEX_OCCUPANCY_CHECK_DISTANCE = 3, -- Distance to check for hex occupancy
+	MOVEMENT_TWEEN_TIME = 1.5 -- Time for smooth movement between hexes
 }
 
 -- Generate unique battle ID
@@ -182,20 +188,53 @@ end
 -- Check if a hex is occupied by any unit
 local function isHexOccupied(hex: Instance, excludeUnit: Model?): boolean
 	for _, child in pairs(hex:GetChildren()) do
-		if child:IsA("Model") and child.Name:find("_") and child ~= excludeUnit then
-			return true
+		if child:IsA("Model") and child ~= excludeUnit then
+			-- Check if this is a battle unit (has underscore in name and is not a bench unit)
+			if child.Name:find("_") and not child.Name:find("Bench_") then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- Check if a hex is reserved by another unit
+local function isHexReserved(hex: Instance, excludeUnitId: string?): boolean
+	if not excludeUnitId then return false end
+	local reservedBy = reservedHexes[hex.Name]
+	return reservedBy and reservedBy ~= excludeUnitId
+end
+
+-- Reserve a hex for a unit
+local function reserveHex(hex: Instance, unitId: string)
+	reservedHexes[hex.Name] = unitId
+end
+
+-- Release a hex reservation
+local function releaseHex(hex: Instance)
+	reservedHexes[hex.Name] = nil
+end
+
+-- Check if a position is too close to any occupied hex
+local function isPositionTooCloseToOccupiedHex(arena: Instance, position: Vector3, excludeUnit: Model?): boolean
+	for _, child in pairs(arena:GetChildren()) do
+		if child.Name:find("Hex_") and isHexOccupied(child, excludeUnit) then
+			local distance = (child.Position - position).Magnitude
+			if distance < BATTLE_CONSTANTS.HEX_OCCUPANCY_CHECK_DISTANCE then
+				return true
+			end
 		end
 	end
 	return false
 end
 
 -- Find the closest unoccupied hex to a target position
-local function findClosestUnoccupiedHex(arena: Instance, targetPosition: Vector3, excludeUnit: Model?): Instance?
+local function findClosestUnoccupiedHex(arena: Instance, targetPosition: Vector3, excludeUnit: Model?, excludeUnitId: string?): Instance?
 	local closestHex = nil
 	local closestDistance = math.huge
 	
 	for _, child in pairs(arena:GetChildren()) do
-		if child.Name:find("Hex_") and not isHexOccupied(child, excludeUnit) then
+		if child.Name:find("Hex_") and not isHexOccupied(child, excludeUnit) and not isHexReserved(child, excludeUnitId) then
 			local distance = (child.Position - targetPosition).Magnitude
 			if distance < closestDistance then
 				closestDistance = distance
@@ -231,8 +270,15 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 		return
 	end
 	
+	-- Check movement cooldown
+	local timeSinceLastMove = tick() - (unit.lastMoveTime or 0)
+	if timeSinceLastMove < BATTLE_CONSTANTS.MOVEMENT_COOLDOWN then
+		return -- Still in cooldown
+	end
+	
 	-- Find the closest unoccupied hex to the target
-	local targetHex = findClosestUnoccupiedHex(arena, target.position, unit.model)
+	local unitId = unit.model.Name
+	local targetHex = findClosestUnoccupiedHex(arena, target.position, unit.model, unitId)
 	if not targetHex then
 		-- Fallback: find any closest hex if no unoccupied ones
 		targetHex = findClosestHex(arena, target.position)
@@ -252,15 +298,63 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 		return
 	end
 	
+	-- Check if the target hex is already occupied or reserved
+	if isHexOccupied(targetHex, unit.model) or isHexReserved(targetHex, unitId) then
+		-- Find a safer hex that's not occupied or reserved
+		local saferHex = nil
+		local closestDistance = math.huge
+		
+		for _, child in pairs(arena:GetChildren()) do
+			if child.Name:find("Hex_") and not isHexOccupied(child, unit.model) and not isHexReserved(child, unitId) then
+				local distance = (child.Position - target.position).Magnitude
+				if distance < closestDistance then
+					closestDistance = distance
+					saferHex = child
+				end
+			end
+		end
+		
+		if saferHex then
+			targetHex = saferHex
+		else
+			-- If no safe hex found, don't move
+			return
+		end
+	end
+	
+	-- Reserve the target hex
+	reserveHex(targetHex, unitId)
+	
+	-- Release reservation on current hex if we have one
+	if currentHex then
+		releaseHex(currentHex)
+	end
+	
 	-- Move to the target hex
 	local newPosition = targetHex.Position
 	unit.position = newPosition
+	unit.lastMoveTime = tick() -- Update movement cooldown
 	
-	-- Move the model to the new position
+	-- Move the model to the new position with smooth animation
 	local targetCFrame = CFrame.new(newPosition + Vector3.new(0, BATTLE_CONSTANTS.UNIT_HEIGHT_OFFSET, 0))
-	unit.model:PivotTo(targetCFrame)
 	
-	print("Unit " .. unit.unit.name .. " moved to hex " .. targetHex.Name)
+	-- Use TweenService for smooth movement
+	local TweenService = game:GetService("TweenService")
+	local tweenInfo = TweenInfo.new(
+		BATTLE_CONSTANTS.MOVEMENT_TWEEN_TIME, -- Duration
+		Enum.EasingStyle.Quad, -- Easing style
+		Enum.EasingDirection.Out, -- Easing direction
+		0, -- Repeat count
+		false, -- Reverse
+		0 -- Delay
+	)
+	
+	local tween = TweenService:Create(unit.model, tweenInfo, {
+		CFrame = targetCFrame
+	})
+	tween:Play()
+	
+	print("Unit " .. unit.unit.name .. " moving to hex " .. targetHex.Name)
 end
 
 -- Attack target unit
@@ -273,6 +367,8 @@ local function attackTarget(unit: BattleUnit, target: BattleUnit)
 	local damage = unit.unit.stats.attack
 	local armor = target.unit.stats.armor
 	local actualDamage = math.max(1, damage - armor)
+	
+	print("Unit " .. unit.unit.name .. " attacking " .. target.unit.name .. " for " .. actualDamage .. " damage")
 	
 	-- Find the Humanoid in the target model
 	local humanoid = target.model:FindFirstChild("Humanoid")
@@ -337,6 +433,9 @@ end
 local function resetUnitsAfterBattle(battleData: BattleData)
 	print("Resetting units after battle...")
 	
+	-- Clear all hex reservations
+	reservedHexes = {}
+	
 	-- Team 1 units (challenged player's original units) - reset to original positions
 	for _, unit in ipairs(battleData.team1) do
 		if unit.model then
@@ -352,17 +451,20 @@ local function resetUnitsAfterBattle(battleData: BattleData)
 				humanoid.Health = humanoid.MaxHealth
 			end
 			
-			-- Reset transparency
+			-- Completely reset all visual changes
 			for _, part in pairs(unit.model:GetDescendants()) do
 				if part:IsA("BasePart") then
+					-- Reset transparency
 					part.Transparency = 0
 				end
 			end
 			
 			-- Move back to original position
 			local targetCFrame = CFrame.new(unit.originalPosition + Vector3.new(0, BATTLE_CONSTANTS.UNIT_HEIGHT_OFFSET, 0))
-			unit.model:SetPrimaryPartCFrame(targetCFrame)
+			unit.model:PivotTo(targetCFrame)
 			unit.position = unit.originalPosition
+			
+			print("Reset unit " .. unit.unit.name .. " to original state")
 		end
 	end
 	
@@ -412,13 +514,11 @@ local function runBattleLoop(battleData: BattleData)
 						
 						if timeSinceLastAttack >= attackCooldown then
 							attackTarget(unit, unit.target)
+							unit.lastAttackTime = tick() -- Update attack time
 						end
 					else
-						-- Move towards target (only move once per second, not continuously)
-						if tick() - unit.lastAttackTime > 1 then -- Only move every second
-							moveUnitTowardsTarget(unit, unit.target, battleData.arena)
-							unit.lastAttackTime = tick() -- Use this to track movement timing
-						end
+						-- Move towards target (uses movement cooldown)
+						moveUnitTowardsTarget(unit, unit.target, battleData.arena)
 					end
 				end
 			end
@@ -441,13 +541,11 @@ local function runBattleLoop(battleData: BattleData)
 						
 						if timeSinceLastAttack >= attackCooldown then
 							attackTarget(unit, unit.target)
+							unit.lastAttackTime = tick() -- Update attack time
 						end
 					else
-						-- Move towards target (only move once per second, not continuously)
-						if tick() - unit.lastAttackTime > 1 then -- Only move every second
-							moveUnitTowardsTarget(unit, unit.target, battleData.arena)
-							unit.lastAttackTime = tick() -- Use this to track movement timing
-						end
+						-- Move towards target (uses movement cooldown)
+						moveUnitTowardsTarget(unit, unit.target, battleData.arena)
 					end
 				end
 			end
