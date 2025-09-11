@@ -54,16 +54,19 @@ local reservedHexes = {} -- {hexName = unitId}
 -- Battle constants
 local BATTLE_CONSTANTS = {
 	UNIT_MOVEMENT_SPEED = 4, -- studs per second (slower movement)
-	ATTACK_RANGE_BUFFER = 2, -- Extra range buffer for melee units
+	ATTACK_RANGE_BUFFER = 4, -- Extra range buffer for range tolerance
 	BATTLE_TIMEOUT = 300, -- 5 minutes max battle time
 	RESET_DELAY = 5, -- 5 seconds before resetting units
 	HEX_SIZE = 4, -- Size of each hex in studs
 	UNIT_HEIGHT_OFFSET = 2, -- Height offset for units above hexes
 	ATTACK_SPEED_MULTIPLIER = 0.5, -- Slow down attack speed by 50%
-	MOVEMENT_COOLDOWN = 3, -- Seconds between hex movements (increased)
+	MOVEMENT_COOLDOWN = 1, -- Seconds between hex movements (faster to allow melee to close)
 	HEX_OCCUPANCY_CHECK_DISTANCE = 3, -- Distance to check for hex occupancy
-	MOVEMENT_TWEEN_TIME = 1.5 -- Time for smooth movement between hexes
+	MOVEMENT_TWEEN_TIME = 1.0 -- Time for smooth movement between hexes
 }
+
+-- Toggle to enable very verbose per-frame attack/range logs
+local ENABLE_VERBOSE_ATTACK_DEBUG = false
 
 -- Generate unique battle ID
 local function generateBattleId(): string
@@ -78,6 +81,9 @@ local function createBattleUnit(model: Model, unit: DataStructures.Unit, team: n
 	local currentHealth = humanoid and humanoid.Health or unit.stats.health
 	local maxHealth = humanoid and humanoid.MaxHealth or unit.stats.health
 	
+	-- Generate a unique battle unit id to track reservations and identity during battle
+	local uniqueId = (unit.id or "unit") .. "_" .. tostring(os.time()) .. "_" .. tostring(math.random(100000, 999999))
+
 	local battleUnit = {
 		unit = unit,
 		model = model,
@@ -88,7 +94,8 @@ local function createBattleUnit(model: Model, unit: DataStructures.Unit, team: n
 		lastAttackTime = 0,
 		team = team,
 		isAlive = true,
-		originalPosition = model:GetPivot().Position
+		originalPosition = model:GetPivot().Position,
+		battleUnitId = uniqueId
 	}
 	
 	-- Store battle data in the model
@@ -97,6 +104,7 @@ local function createBattleUnit(model: Model, unit: DataStructures.Unit, team: n
 	model:SetAttribute("Health", battleUnit.health)
 	model:SetAttribute("MaxHealth", battleUnit.maxHealth)
 	model:SetAttribute("IsAlive", true)
+	model:SetAttribute("BattleUnitId", uniqueId)
 	
 	return battleUnit
 end
@@ -182,7 +190,8 @@ end
 local function isInAttackRange(unit: BattleUnit, target: BattleUnit): boolean
 	local distance = calculateDistance(unit.position, target.position)
 	local attackRange = unit.unit.stats.range * BATTLE_CONSTANTS.HEX_SIZE + BATTLE_CONSTANTS.ATTACK_RANGE_BUFFER
-	return distance <= attackRange
+	local epsilon = 0.75
+	return distance <= (attackRange + epsilon)
 end
 
 -- Check if a hex is occupied by any unit
@@ -277,7 +286,7 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 	end
 	
 	-- Find the closest unoccupied hex to the target
-	local unitId = unit.model.Name
+	local unitId = unit.battleUnitId or unit.model:GetAttribute("BattleUnitId") or unit.model.Name
 	local targetHex = findClosestUnoccupiedHex(arena, target.position, unit.model, unitId)
 	if not targetHex then
 		-- Fallback: find any closest hex if no unoccupied ones
@@ -339,20 +348,38 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 	local targetCFrame = CFrame.new(newPosition + Vector3.new(0, BATTLE_CONSTANTS.UNIT_HEIGHT_OFFSET, 0))
 	
 	-- Use TweenService for smooth movement
-	local TweenService = game:GetService("TweenService")
-	local tweenInfo = TweenInfo.new(
-		BATTLE_CONSTANTS.MOVEMENT_TWEEN_TIME, -- Duration
-		Enum.EasingStyle.Quad, -- Easing style
-		Enum.EasingDirection.Out, -- Easing direction
-		0, -- Repeat count
-		false, -- Reverse
-		0 -- Delay
-	)
-	
-	local tween = TweenService:Create(unit.model, tweenInfo, {
-		CFrame = targetCFrame
-	})
-	tween:Play()
+	-- Check if the model has a PrimaryPart for tweening
+	local primaryPart = unit.model.PrimaryPart
+	if primaryPart then
+		-- Use PrimaryPart for smooth tweening
+		local TweenService = game:GetService("TweenService")
+		local tweenInfo = TweenInfo.new(
+			BATTLE_CONSTANTS.MOVEMENT_TWEEN_TIME, -- Duration
+			Enum.EasingStyle.Quad, -- Easing style
+			Enum.EasingDirection.Out, -- Easing direction
+			0, -- Repeat count
+			false, -- Reverse
+			0 -- Delay
+		)
+		
+		local tween = TweenService:Create(primaryPart, tweenInfo, {
+			CFrame = targetCFrame
+		})
+		tween.Completed:Connect(function()
+			-- Ensure final placement and parent under the destination hex for occupancy tracking
+			unit.model:PivotTo(targetCFrame)
+			unit.model.Parent = targetHex
+			-- Release reservation now that the hex is occupied
+			releaseHex(targetHex)
+		end)
+		tween:Play()
+	else
+		-- Fallback: Use PivotTo for immediate positioning and parent under the destination hex
+		unit.model:PivotTo(targetCFrame)
+		unit.model.Parent = targetHex
+		-- Release reservation now that the hex is occupied
+		releaseHex(targetHex)
+	end
 	
 	print("Unit " .. unit.unit.name .. " moving to hex " .. targetHex.Name)
 end
@@ -360,6 +387,7 @@ end
 -- Attack target unit
 local function attackTarget(unit: BattleUnit, target: BattleUnit)
 	if not unit.model or not target.model then
+		print("DEBUG: attackTarget failed - missing models")
 		return
 	end
 	
@@ -368,16 +396,19 @@ local function attackTarget(unit: BattleUnit, target: BattleUnit)
 	local armor = target.unit.stats.armor
 	local actualDamage = math.max(1, damage - armor)
 	
-	print("Unit " .. unit.unit.name .. " attacking " .. target.unit.name .. " for " .. actualDamage .. " damage")
+	print("DEBUG: Unit " .. unit.unit.name .. " attacking " .. target.unit.name .. " for " .. actualDamage .. " damage")
+	print("DEBUG: Attacker stats - damage: " .. damage .. ", target armor: " .. armor)
 	
 	-- Find the Humanoid in the target model
 	local humanoid = target.model:FindFirstChild("Humanoid")
 	if humanoid then
+		print("DEBUG: Found Humanoid in target, applying damage via Humanoid")
 		-- Use Roblox's built-in damage system
 		humanoid:TakeDamage(actualDamage)
 		
 		-- Update our internal health tracking
 		target.health = humanoid.Health
+		print("DEBUG: Target health after damage: " .. target.health)
 		
 		-- Check if target died
 		if humanoid.Health <= 0 then
@@ -503,16 +534,33 @@ local function runBattleLoop(battleData: BattleData)
 				-- Find target if we don't have one
 				if not unit.target or not unit.target.isAlive then
 					unit.target = findClosestEnemy(unit, battleData.team2)
+					if unit.target then
+						print("DEBUG: Unit " .. unit.unit.name .. " found new target: " .. unit.target.unit.name)
+					end
 				end
 				
 				if unit.target then
 					-- Check if we're in attack range
+					local distance = calculateDistance(unit.position, unit.target.position)
+					local attackRange = unit.unit.stats.range * BATTLE_CONSTANTS.HEX_SIZE + BATTLE_CONSTANTS.ATTACK_RANGE_BUFFER
+					
+					if ENABLE_VERBOSE_ATTACK_DEBUG then
+						print("DEBUG: Unit " .. unit.unit.name .. " distance to target: " .. distance .. ", attack range: " .. attackRange)
+					end
+					
 					if isInAttackRange(unit, unit.target) then
 						-- Check if we can attack (based on attack speed with multiplier)
 						local timeSinceLastAttack = tick() - unit.lastAttackTime
 						local attackCooldown = (1 / unit.unit.stats.attackSpeed) / BATTLE_CONSTANTS.ATTACK_SPEED_MULTIPLIER
 						
+						if ENABLE_VERBOSE_ATTACK_DEBUG then
+							print("DEBUG: Unit " .. unit.unit.name .. " in range! Time since last attack: " .. timeSinceLastAttack .. ", cooldown: " .. attackCooldown)
+						end
+						
 						if timeSinceLastAttack >= attackCooldown then
+							if ENABLE_VERBOSE_ATTACK_DEBUG then
+								print("DEBUG: Unit " .. unit.unit.name .. " attacking!")
+							end
 							attackTarget(unit, unit.target)
 							unit.lastAttackTime = tick() -- Update attack time
 						end
@@ -520,6 +568,8 @@ local function runBattleLoop(battleData: BattleData)
 						-- Move towards target (uses movement cooldown)
 						moveUnitTowardsTarget(unit, unit.target, battleData.arena)
 					end
+				else
+					print("DEBUG: Unit " .. unit.unit.name .. " has no target")
 				end
 			end
 		end
@@ -530,16 +580,33 @@ local function runBattleLoop(battleData: BattleData)
 				-- Find target if we don't have one
 				if not unit.target or not unit.target.isAlive then
 					unit.target = findClosestEnemy(unit, battleData.team1)
+					if unit.target then
+						print("DEBUG: Enemy unit " .. unit.unit.name .. " found new target: " .. unit.target.unit.name)
+					end
 				end
 				
 				if unit.target then
 					-- Check if we're in attack range
+					local distance = calculateDistance(unit.position, unit.target.position)
+					local attackRange = unit.unit.stats.range * BATTLE_CONSTANTS.HEX_SIZE + BATTLE_CONSTANTS.ATTACK_RANGE_BUFFER
+					
+					if ENABLE_VERBOSE_ATTACK_DEBUG then
+						print("DEBUG: Enemy unit " .. unit.unit.name .. " distance to target: " .. distance .. ", attack range: " .. attackRange)
+					end
+					
 					if isInAttackRange(unit, unit.target) then
 						-- Check if we can attack (based on attack speed with multiplier)
 						local timeSinceLastAttack = tick() - unit.lastAttackTime
 						local attackCooldown = (1 / unit.unit.stats.attackSpeed) / BATTLE_CONSTANTS.ATTACK_SPEED_MULTIPLIER
 						
+						if ENABLE_VERBOSE_ATTACK_DEBUG then
+							print("DEBUG: Enemy unit " .. unit.unit.name .. " in range! Time since last attack: " .. timeSinceLastAttack .. ", cooldown: " .. attackCooldown)
+						end
+						
 						if timeSinceLastAttack >= attackCooldown then
+							if ENABLE_VERBOSE_ATTACK_DEBUG then
+								print("DEBUG: Enemy unit " .. unit.unit.name .. " attacking!")
+							end
 							attackTarget(unit, unit.target)
 							unit.lastAttackTime = tick() -- Update attack time
 						end
@@ -547,6 +614,8 @@ local function runBattleLoop(battleData: BattleData)
 						-- Move towards target (uses movement cooldown)
 						moveUnitTowardsTarget(unit, unit.target, battleData.arena)
 					end
+				else
+					print("DEBUG: Enemy unit " .. unit.unit.name .. " has no target")
 				end
 			end
 		end
