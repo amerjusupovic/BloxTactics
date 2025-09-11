@@ -112,36 +112,23 @@ end
 -- Get all units from a board (either player board or enemy board)
 local function getUnitsFromBoard(board: Instance, team: number): {BattleUnit}
 	local battleUnits = {}
-	
 	print("DEBUG: Searching for units in board:", board.Name, "Team:", team)
-	
-	-- Search through all hexes in the board
+
 	for _, hex in pairs(board:GetChildren()) do
 		if hex.Name:find("Hex_") then
 			print("DEBUG: Checking hex:", hex.Name)
 			for _, child in pairs(hex:GetChildren()) do
-				-- For team 1 (player), look for regular units (not enemy units)
-				-- For team 2 (enemy), look for enemy units
-				local isCorrectUnitType = false
-				if team == 1 then
-					-- Player units: look for units that are NOT enemy units
-					isCorrectUnitType = child:IsA("Model") and child.Name:find("_") and not child.Name:find("EnemyUnit_")
-				elseif team == 2 then
-					-- Enemy units: look for enemy units specifically
-					isCorrectUnitType = child:IsA("Model") and child.Name:find("EnemyUnit_")
-				end
-				
-				if isCorrectUnitType then
-					print("DEBUG: Found unit model:", child.Name)
-					-- Get unit data from attributes
+				if child:IsA("Model") then
 					local unitId = child:GetAttribute("UnitId")
 					local unitName = child:GetAttribute("UnitName")
 					local unitTier = child:GetAttribute("UnitTier")
-					
-					print("DEBUG: Unit attributes - ID:", unitId, "Name:", unitName, "Tier:", unitTier)
-					
-					if unitId and unitName and unitTier then
-						-- Create unit data structure
+
+					local isTeam1Unit = team == 1 and (not child.Name:find("EnemyUnit_") and unitId and unitName and unitTier)
+					local isTeam2Unit = team == 2 and (child.Name:find("EnemyUnit_") and unitId and unitName and unitTier)
+
+					if isTeam1Unit or isTeam2Unit then
+						print("DEBUG: Found unit model:", child.Name)
+						print("DEBUG: Unit attributes - ID:", unitId, "Name:", unitName, "Tier:", unitTier)
 						local unitData = UnitDatabase.createUnit(unitId, unitTier)
 						if unitData then
 							print("DEBUG: Created unit data for:", unitName)
@@ -151,14 +138,15 @@ local function getUnitsFromBoard(board: Instance, team: number): {BattleUnit}
 						else
 							warn("DEBUG: Failed to create unit data for:", unitName)
 						end
-					else
-						warn("DEBUG: Missing unit attributes for:", child.Name)
 					end
 				end
 			end
 		end
 	end
-	
+
+	if #battleUnits == 0 then
+		warn("No valid units found for team " .. tostring(team) .. " in board " .. board.Name)
+	end
 	print("DEBUG: Found", #battleUnits, "units for team", team)
 	return battleUnits
 end
@@ -475,26 +463,35 @@ local function resetUnitsAfterBattle(battleData: BattleData)
 			unit.isAlive = true
 			unit.model:SetAttribute("Health", unit.health)
 			unit.model:SetAttribute("IsAlive", true)
-			
+
 			-- Reset Humanoid health if available
 			local humanoid = unit.model:FindFirstChild("Humanoid")
 			if humanoid then
+				if humanoid.Health <= 0 then
+					print("[DEBUG] Humanoid for unit " .. unit.unit.name .. " is dead, replacing...")
+					local newHumanoid = Instance.new("Humanoid")
+					newHumanoid.Name = "Humanoid"
+					newHumanoid.Health = humanoid.MaxHealth
+					newHumanoid.MaxHealth = humanoid.MaxHealth
+					humanoid:Destroy()
+					newHumanoid.Parent = unit.model
+					humanoid = newHumanoid
+				end
 				humanoid.Health = humanoid.MaxHealth
 			end
-			
+
 			-- Completely reset all visual changes
 			for _, part in pairs(unit.model:GetDescendants()) do
 				if part:IsA("BasePart") then
-					-- Reset transparency
 					part.Transparency = 0
 				end
 			end
-			
+
 			-- Move back to original position
 			local targetCFrame = CFrame.new(unit.originalPosition + Vector3.new(0, BATTLE_CONSTANTS.UNIT_HEIGHT_OFFSET, 0))
 			unit.model:PivotTo(targetCFrame)
 			unit.position = unit.originalPosition
-			
+
 			print("Reset unit " .. unit.unit.name .. " to original state")
 		end
 	end
@@ -531,41 +528,28 @@ local function runBattleLoop(battleData: BattleData)
 		-- Update each unit
 		for _, unit in ipairs(battleData.team1) do
 			if unit.isAlive then
-				-- Find target if we don't have one
+				print("[DEBUG] Team 1 Unit " .. unit.unit.name .. " Position: " .. tostring(unit.position))
 				if not unit.target or not unit.target.isAlive then
 					unit.target = findClosestEnemy(unit, battleData.team2)
 					if unit.target then
-						print("DEBUG: Unit " .. unit.unit.name .. " found new target: " .. unit.target.unit.name)
+						print("DEBUG: Unit " .. unit.unit.name .. " found new target: " .. unit.target.unit.name .. " at position " .. tostring(unit.target.position))
 					end
 				end
-				
 				if unit.target then
-					-- Check if we're in attack range
 					local distance = calculateDistance(unit.position, unit.target.position)
 					local attackRange = unit.unit.stats.range * BATTLE_CONSTANTS.HEX_SIZE + BATTLE_CONSTANTS.ATTACK_RANGE_BUFFER
-					
-					if ENABLE_VERBOSE_ATTACK_DEBUG then
-						print("DEBUG: Unit " .. unit.unit.name .. " distance to target: " .. distance .. ", attack range: " .. attackRange)
-					end
-					
+					print("[DEBUG] Team 1 Unit " .. unit.unit.name .. " distance to target " .. unit.target.unit.name .. ": " .. distance .. ", attack range: " .. attackRange)
 					if isInAttackRange(unit, unit.target) then
-						-- Check if we can attack (based on attack speed with multiplier)
 						local timeSinceLastAttack = tick() - unit.lastAttackTime
 						local attackCooldown = (1 / unit.unit.stats.attackSpeed) / BATTLE_CONSTANTS.ATTACK_SPEED_MULTIPLIER
-						
-						if ENABLE_VERBOSE_ATTACK_DEBUG then
-							print("DEBUG: Unit " .. unit.unit.name .. " in range! Time since last attack: " .. timeSinceLastAttack .. ", cooldown: " .. attackCooldown)
-						end
-						
+						print("[DEBUG] Team 1 Unit " .. unit.unit.name .. " in range! Time since last attack: " .. timeSinceLastAttack .. ", cooldown: " .. attackCooldown)
 						if timeSinceLastAttack >= attackCooldown then
-							if ENABLE_VERBOSE_ATTACK_DEBUG then
-								print("DEBUG: Unit " .. unit.unit.name .. " attacking!")
-							end
+							print("[DEBUG] Team 1 Unit " .. unit.unit.name .. " attacking!")
 							attackTarget(unit, unit.target)
 							unit.lastAttackTime = tick() -- Update attack time
 						end
 					else
-						-- Move towards target (uses movement cooldown)
+						print("[DEBUG] Team 1 Unit " .. unit.unit.name .. " not in attack range of " .. unit.target.unit.name)
 						moveUnitTowardsTarget(unit, unit.target, battleData.arena)
 					end
 				else
@@ -577,41 +561,28 @@ local function runBattleLoop(battleData: BattleData)
 		-- Update team 2 units
 		for _, unit in ipairs(battleData.team2) do
 			if unit.isAlive then
-				-- Find target if we don't have one
+				print("[DEBUG] Team 2 Unit " .. unit.unit.name .. " Position: " .. tostring(unit.position))
 				if not unit.target or not unit.target.isAlive then
 					unit.target = findClosestEnemy(unit, battleData.team1)
 					if unit.target then
-						print("DEBUG: Enemy unit " .. unit.unit.name .. " found new target: " .. unit.target.unit.name)
+						print("DEBUG: Enemy unit " .. unit.unit.name .. " found new target: " .. unit.target.unit.name .. " at position " .. tostring(unit.target.position))
 					end
 				end
-				
 				if unit.target then
-					-- Check if we're in attack range
 					local distance = calculateDistance(unit.position, unit.target.position)
 					local attackRange = unit.unit.stats.range * BATTLE_CONSTANTS.HEX_SIZE + BATTLE_CONSTANTS.ATTACK_RANGE_BUFFER
-					
-					if ENABLE_VERBOSE_ATTACK_DEBUG then
-						print("DEBUG: Enemy unit " .. unit.unit.name .. " distance to target: " .. distance .. ", attack range: " .. attackRange)
-					end
-					
+					print("[DEBUG] Team 2 Unit " .. unit.unit.name .. " distance to target " .. unit.target.unit.name .. ": " .. distance .. ", attack range: " .. attackRange)
 					if isInAttackRange(unit, unit.target) then
-						-- Check if we can attack (based on attack speed with multiplier)
 						local timeSinceLastAttack = tick() - unit.lastAttackTime
 						local attackCooldown = (1 / unit.unit.stats.attackSpeed) / BATTLE_CONSTANTS.ATTACK_SPEED_MULTIPLIER
-						
-						if ENABLE_VERBOSE_ATTACK_DEBUG then
-							print("DEBUG: Enemy unit " .. unit.unit.name .. " in range! Time since last attack: " .. timeSinceLastAttack .. ", cooldown: " .. attackCooldown)
-						end
-						
+						print("[DEBUG] Team 2 Unit " .. unit.unit.name .. " in range! Time since last attack: " .. timeSinceLastAttack .. ", cooldown: " .. attackCooldown)
 						if timeSinceLastAttack >= attackCooldown then
-							if ENABLE_VERBOSE_ATTACK_DEBUG then
-								print("DEBUG: Enemy unit " .. unit.unit.name .. " attacking!")
-							end
+							print("[DEBUG] Team 2 Unit " .. unit.unit.name .. " attacking!")
 							attackTarget(unit, unit.target)
 							unit.lastAttackTime = tick() -- Update attack time
 						end
 					else
-						-- Move towards target (uses movement cooldown)
+						print("[DEBUG] Team 2 Unit " .. unit.unit.name .. " not in attack range of " .. unit.target.unit.name)
 						moveUnitTowardsTarget(unit, unit.target, battleData.arena)
 					end
 				else
@@ -685,6 +656,13 @@ function BattleManager.startBattle(challengeId: string, player1Id: number, playe
 	activeBattles[battleId] = battleData
 	
 	print("Battle created with " .. #battleData.team1 .. " units on team 1 and " .. #battleData.team2 .. " units on team 2")
+	-- Debug: Print initial positions of all units
+	for i, unit in ipairs(battleData.team1) do
+		print("[DEBUG] Team 1 Unit " .. tostring(i) .. ": " .. unit.unit.name .. " Position: " .. tostring(unit.position))
+	end
+	for i, unit in ipairs(battleData.team2) do
+		print("[DEBUG] Team 2 Unit " .. tostring(i) .. ": " .. unit.unit.name .. " Position: " .. tostring(unit.position))
+	end
 	
 	-- Start the battle
 	battleData.status = "in_progress"
