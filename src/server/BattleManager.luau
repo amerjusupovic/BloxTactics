@@ -57,7 +57,7 @@ local BATTLE_CONSTANTS = {
 	ATTACK_RANGE_BUFFER = 4, -- Extra range buffer for range tolerance
 	BATTLE_TIMEOUT = 300, -- 5 minutes max battle time
 	RESET_DELAY = 5, -- 5 seconds before resetting units
-	HEX_SIZE = 4, -- Size of each hex in studs
+	HEX_SIZE = 20, -- Size of each hex in studs
 	UNIT_HEIGHT_OFFSET = 2, -- Height offset for units above hexes
 	ATTACK_SPEED_MULTIPLIER = 0.5, -- Slow down attack speed by 50%
 	MOVEMENT_COOLDOWN = 1, -- Seconds between hex movements (faster to allow melee to close)
@@ -402,15 +402,12 @@ local function attackTarget(unit: BattleUnit, target: BattleUnit)
 		if humanoid.Health <= 0 then
 			target.isAlive = false
 			target.model:SetAttribute("IsAlive", false)
-			
-			-- Make the model semi-transparent and gray
+			-- Make the model semi-transparent
 			for _, part in pairs(target.model:GetDescendants()) do
 				if part:IsA("BasePart") then
 					part.Transparency = 0.7
-					part.Color = Color3.new(0.5, 0.5, 0.5) -- Gray
 				end
 			end
-			
 			print("Unit " .. target.unit.name .. " died!")
 		end
 	else
@@ -468,16 +465,38 @@ local function resetUnitsAfterBattle(battleData: BattleData)
 			local humanoid = unit.model:FindFirstChild("Humanoid")
 			if humanoid then
 				if humanoid.Health <= 0 then
-					print("[DEBUG] Humanoid for unit " .. unit.unit.name .. " is dead, replacing...")
-					local newHumanoid = Instance.new("Humanoid")
-					newHumanoid.Name = "Humanoid"
-					newHumanoid.Health = humanoid.MaxHealth
-					newHumanoid.MaxHealth = humanoid.MaxHealth
-					humanoid:Destroy()
-					newHumanoid.Parent = unit.model
-					humanoid = newHumanoid
+					print("[DEBUG] Unit " .. unit.unit.name .. " is dead, replacing entire model from template...")
+					local ReplicatedStorage = game:GetService("ReplicatedStorage")
+					local unitModels = ReplicatedStorage:FindFirstChild("UnitModels")
+					if unitModels then
+						local template = unitModels:FindFirstChild(unit.unit.name)
+						if template then
+							local newModel = template:Clone()
+							-- Apply tier scaling using UnitDatabase
+							local UnitDatabase = require(game:GetService("ReplicatedStorage").Shared.UnitDatabase)
+							if unit.unit.tier and newModel:FindFirstChild("Scale") then
+								local scale = UnitDatabase.calculateUnitSizeScale(unit.unit.tier)
+								newModel.Scale.Value = scale
+							end
+							-- Parent to the same location as the old model
+							local parent = unit.model.Parent
+							local position = unit.model:GetPivot()
+							unit.model:Destroy()
+							newModel.Parent = parent
+							newModel:PivotTo(position)
+							unit.model = newModel
+							humanoid = newModel:FindFirstChild("Humanoid")
+						else
+							warn("[BattleManager] Could not find template model for unit: " .. unit.unit.name)
+						end
+					else
+						warn("[BattleManager] UnitModels folder not found in ReplicatedStorage")
+					end
 				end
 				humanoid.Health = humanoid.MaxHealth
+				unit.health = humanoid.Health
+				unit.model:SetAttribute("Health", humanoid.Health)
+				unit.model:SetAttribute("IsAlive", true)
 			end
 
 			-- Completely reset all visual changes
