@@ -369,6 +369,15 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 		releaseHex(targetHex)
 	end
 	
+	-- Play move animation for unit
+	local humanoid = unit.model:FindFirstChild("Humanoid")
+	if humanoid and unit.unit.moveAnimationId then
+		local anim = Instance.new("Animation")
+		anim.AnimationId = unit.unit.moveAnimationId
+		local track = humanoid:LoadAnimation(anim)
+		track:Play()
+	end
+	
 	print("Unit " .. unit.unit.name .. " moving to hex " .. targetHex.Name)
 end
 
@@ -386,6 +395,15 @@ local function attackTarget(unit: BattleUnit, target: BattleUnit)
 	
 	print("DEBUG: Unit " .. unit.unit.name .. " attacking " .. target.unit.name .. " for " .. actualDamage .. " damage")
 	print("DEBUG: Attacker stats - damage: " .. damage .. ", target armor: " .. armor)
+	
+	-- Play attack animation for attacker
+	local attackerHumanoid = unit.model:FindFirstChild("Humanoid")
+	if attackerHumanoid and unit.unit.attackAnimationId then
+		local anim = Instance.new("Animation")
+		anim.AnimationId = unit.unit.attackAnimationId
+		local track = attackerHumanoid:LoadAnimation(anim)
+		track:Play()
+	end
 	
 	-- Find the Humanoid in the target model
 	local humanoid = target.model:FindFirstChild("Humanoid")

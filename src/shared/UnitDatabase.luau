@@ -151,6 +151,8 @@ function UnitDatabase.createUnit(id: string, tier: number): Unit?
 	
 	local stats = UnitDatabase.calculateUnitStats(baseUnit.baseStats, tier)
 	
+	local AnimationConstants = require(script.Parent.AnimationConstants)
+	local anims = AnimationConstants[baseUnit.name] or {}
 	return {
 		id = baseUnit.id,
 		name = baseUnit.name,
@@ -159,7 +161,9 @@ function UnitDatabase.createUnit(id: string, tier: number): Unit?
 		stats = stats,
 		abilities = baseUnit.abilities,
 		position = nil,
-		imageAssetId = baseUnit.imageAssetId
+		imageAssetId = baseUnit.imageAssetId,
+		attackAnimationId = anims.Attack,
+		moveAnimationId = anims.Move
 	}
 end
 
