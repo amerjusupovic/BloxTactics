@@ -62,7 +62,7 @@ local BATTLE_CONSTANTS = {
 	ATTACK_SPEED_MULTIPLIER = 0.5, -- Slow down attack speed by 50%
 	MOVEMENT_COOLDOWN = 1, -- Seconds between hex movements (faster to allow melee to close)
 	HEX_OCCUPANCY_CHECK_DISTANCE = 3, -- Distance to check for hex occupancy
-	MOVEMENT_TWEEN_TIME = 1.0 -- Time for smooth movement between hexes
+	MOVEMENT_TWEEN_TIME = 3.0 -- Time for smooth movement between hexes
 }
 
 -- Toggle to enable very verbose per-frame attack/range logs
@@ -332,53 +332,54 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 	unit.position = newPosition
 	unit.lastMoveTime = tick() -- Update movement cooldown
 	
-	-- Move the model to the new position with smooth animation
-	local targetCFrame = CFrame.new(newPosition + Vector3.new(0, BATTLE_CONSTANTS.UNIT_HEIGHT_OFFSET, 0))
-	
-	-- Use TweenService for smooth movement
-	-- Check if the model has a PrimaryPart for tweening
-	local primaryPart = unit.model.PrimaryPart
-	if primaryPart then
-		-- Use PrimaryPart for smooth tweening
-		local TweenService = game:GetService("TweenService")
-		local tweenInfo = TweenInfo.new(
-			BATTLE_CONSTANTS.MOVEMENT_TWEEN_TIME, -- Duration
-			Enum.EasingStyle.Quad, -- Easing style
-			Enum.EasingDirection.Out, -- Easing direction
-			0, -- Repeat count
-			false, -- Reverse
-			0 -- Delay
-		)
-		
-		local tween = TweenService:Create(primaryPart, tweenInfo, {
-			CFrame = targetCFrame
-		})
-		tween.Completed:Connect(function()
-			-- Ensure final placement and parent under the destination hex for occupancy tracking
-			unit.model:PivotTo(targetCFrame)
-			unit.model.Parent = targetHex
-			-- Release reservation now that the hex is occupied
-			releaseHex(targetHex)
-		end)
-		tween:Play()
-	else
-		-- Fallback: Use PivotTo for immediate positioning and parent under the destination hex
-		unit.model:PivotTo(targetCFrame)
-		unit.model.Parent = targetHex
-		-- Release reservation now that the hex is occupied
-		releaseHex(targetHex)
-	end
-	
 	-- Play move animation for unit
 	local humanoid = unit.model:FindFirstChild("Humanoid")
-	if humanoid and unit.unit.moveAnimationId then
-		local anim = Instance.new("Animation")
-		anim.AnimationId = unit.unit.moveAnimationId
-		local track = humanoid:LoadAnimation(anim)
-		track:Play()
-	end
-	
-	print("Unit " .. unit.unit.name .. " moving to hex " .. targetHex.Name)
+	local moveTrack = nil
+    if humanoid and unit.unit.moveAnimationId then
+        local anim = Instance.new("Animation")
+        anim.AnimationId = unit.unit.moveAnimationId
+        moveTrack = humanoid:LoadAnimation(anim)
+        moveTrack:Play()
+    end
+    -- Make the model face the target hex before moving
+    local currentPos = unit.model:GetPivot().Position
+    local targetPos = newPosition + Vector3.new(0, BATTLE_CONSTANTS.UNIT_HEIGHT_OFFSET, 0)
+    local lookAtCFrame = CFrame.new(currentPos, targetPos)
+    unit.model:PivotTo(lookAtCFrame)
+    -- Move the model to the new position with smooth animation
+    local targetCFrame = CFrame.new(targetPos)
+    local primaryPart = unit.model.PrimaryPart
+    if primaryPart then
+        local TweenService = game:GetService("TweenService")
+        local tweenInfo = TweenInfo.new(
+            BATTLE_CONSTANTS.MOVEMENT_TWEEN_TIME, -- Duration
+            Enum.EasingStyle.Quad,
+            Enum.EasingDirection.Out,
+            0,
+            false,
+            0
+        )
+        local tween = TweenService:Create(primaryPart, tweenInfo, {
+            CFrame = targetCFrame
+        })
+        tween.Completed:Connect(function()
+            unit.model:PivotTo(targetCFrame)
+            unit.model.Parent = targetHex
+            releaseHex(targetHex)
+            if moveTrack then
+                moveTrack:Stop()
+            end
+        end)
+        tween:Play()
+    else
+        unit.model:PivotTo(targetCFrame)
+        unit.model.Parent = targetHex
+        releaseHex(targetHex)
+        if moveTrack then
+            moveTrack:Stop()
+        end
+    end
+    print("Unit " .. unit.unit.name .. " moving to hex " .. targetHex.Name)
 end
 
 -- Attack target unit
@@ -396,15 +397,21 @@ local function attackTarget(unit: BattleUnit, target: BattleUnit)
 	print("DEBUG: Unit " .. unit.unit.name .. " attacking " .. target.unit.name .. " for " .. actualDamage .. " damage")
 	print("DEBUG: Attacker stats - damage: " .. damage .. ", target armor: " .. armor)
 	
-	-- Play attack animation for attacker
-	local attackerHumanoid = unit.model:FindFirstChild("Humanoid")
-	if attackerHumanoid and unit.unit.attackAnimationId then
-		local anim = Instance.new("Animation")
-		anim.AnimationId = unit.unit.attackAnimationId
-		local track = attackerHumanoid:LoadAnimation(anim)
-		track:Play()
-	end
-	
+	-- Play attack animation for attacker and stop move animation if running
+    local attackerHumanoid = unit.model:FindFirstChild("Humanoid")
+    if attackerHumanoid and unit.unit.attackAnimationId then
+        -- Stop move animation if running
+        for _, track in ipairs(attackerHumanoid:GetPlayingAnimationTracks()) do
+            if track.Animation and track.Animation.AnimationId == unit.unit.moveAnimationId then
+                track:Stop()
+            end
+        end
+        local anim = Instance.new("Animation")
+        anim.AnimationId = unit.unit.attackAnimationId
+        local track = attackerHumanoid:LoadAnimation(anim)
+        track:Play()
+    end
+    
 	-- Find the Humanoid in the target model
 	local humanoid = target.model:FindFirstChild("Humanoid")
 	if humanoid then
@@ -542,6 +549,34 @@ local function resetUnitsAfterBattle(battleData: BattleData)
 	end
 	
 	print("Battle reset complete - enemy units removed, original units restored")
+end
+
+-- Stop all move animations for all units (call before reset)
+local function stopAllMoveAnimations(battleData)
+    for _, unit in ipairs(battleData.team1) do
+        if unit.model then
+            local humanoid = unit.model:FindFirstChild("Humanoid")
+            if humanoid and unit.unit and unit.unit.moveAnimationId then
+                for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+                    if track.Animation and track.Animation.AnimationId == unit.unit.moveAnimationId then
+                        track:Stop()
+                    end
+                end
+            end
+        end
+    end
+    for _, unit in ipairs(battleData.team2) do
+        if unit.model then
+            local humanoid = unit.model:FindFirstChild("Humanoid")
+            if humanoid and unit.unit and unit.unit.moveAnimationId then
+                for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+                    if track.Animation and track.Animation.AnimationId == unit.unit.moveAnimationId then
+                        track:Stop()
+                    end
+                end
+            end
+        end
+    end
 end
 
 -- Main battle loop
@@ -737,8 +772,9 @@ function BattleManager.endBattle(battleId: string, winnerId: number?)
 	end
 	
 	-- Wait before resetting units
-	wait(BATTLE_CONSTANTS.RESET_DELAY)
-	resetUnitsAfterBattle(battleData)
+	stopAllMoveAnimations(battleData)
+    wait(BATTLE_CONSTANTS.RESET_DELAY)
+    resetUnitsAfterBattle(battleData)
 	
 	-- Clean up battle
 	activeBattles[battleId] = nil
