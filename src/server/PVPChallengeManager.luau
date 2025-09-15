@@ -564,32 +564,62 @@ function PVPChallengeManager.endBattle(challengeId: string, winnerId: number?): 
 	
 	-- Determine winner and loser
 	local _loserId = winnerId and ((winnerId == challenge.challengerId) and challenge.challengedId or challenge.challengerId) or nil
-	
-	-- Calculate rewards (this will be implemented when battle system is added)
-	-- For now, just notify players
-	
+
 	local challengerPlayer = Players:GetPlayerByUserId(challenge.challengerId)
 	local challengedPlayer = Players:GetPlayerByUserId(challenge.challengedId)
-	
-	if challengerPlayer then
-		local battleEndEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
-		if winnerId == challenge.challengerId then
-			battleEndEvent:FireClient(challengerPlayer, "Victory! You won the battle!", 5)
-		elseif winnerId == challenge.challengedId then
-			battleEndEvent:FireClient(challengerPlayer, "Defeat! You lost the battle.", 5)
+
+	-- Integrate rewards using CombatRewards & PlayerDataManager
+	-- This section processes win/loss, updates streaks, applies calculated XP & gold, and notifies players
+	local PlayerDataManager = require(script.Parent.PlayerData)
+	local CombatRewards = require(game.ReplicatedStorage.Shared.CombatRewards)
+
+	if winnerId and _loserId then
+		-- Process streaks and collect levels/streak for reward calculation
+		local resultInfo = PlayerDataManager.processBattleResult(winnerId, _loserId)
+		if resultInfo then
+			local rewards = CombatRewards.applyBattleRewards(resultInfo.winnerId, resultInfo.loserId, resultInfo.winnerLevel, resultInfo.loserLevel, resultInfo.winnerStreak, PlayerDataManager)
+
+			-- Notify winner
+			local winnerPlayer = Players:GetPlayerByUserId(resultInfo.winnerId)
+			if winnerPlayer then
+				local battleEndEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
+				battleEndEvent:FireClient(winnerPlayer, string.format("Victory! +%d XP, +%d Gold (Streak %d)", rewards.winner.experience, rewards.winner.gold, resultInfo.winnerStreak), 6)
+			end
+
+			-- Notify loser
+			local loserPlayer = Players:GetPlayerByUserId(resultInfo.loserId)
+			if loserPlayer then
+				local battleEndEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
+				battleEndEvent:FireClient(loserPlayer, string.format("Defeat. +%d XP, +%d Gold", rewards.loser.experience, rewards.loser.gold), 6)
+			end
 		else
-			battleEndEvent:FireClient(challengerPlayer, "Draw! The battle ended in a tie.", 5)
+			-- Fallback notifications if resultInfo missing
+			if challengerPlayer then
+				local battleEndEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
+				if winnerId == challenge.challengerId then
+					battleEndEvent:FireClient(challengerPlayer, "Victory! (Rewards unavailable)", 5)
+				else
+					battleEndEvent:FireClient(challengerPlayer, "Defeat! (Rewards unavailable)", 5)
+				end
+			end
+			if challengedPlayer then
+				local battleEndEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
+				if winnerId == challenge.challengedId then
+					battleEndEvent:FireClient(challengedPlayer, "Victory! (Rewards unavailable)", 5)
+				else
+					battleEndEvent:FireClient(challengedPlayer, "Defeat! (Rewards unavailable)", 5)
+				end
+			end
 		end
-	end
-	
-	if challengedPlayer then
-		local battleEndEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
-		if winnerId == challenge.challengedId then
-			battleEndEvent:FireClient(challengedPlayer, "Victory! You won the battle!", 5)
-		elseif winnerId == challenge.challengerId then
-			battleEndEvent:FireClient(challengedPlayer, "Defeat! You lost the battle.", 5)
-		else
-			battleEndEvent:FireClient(challengedPlayer, "Draw! The battle ended in a tie.", 5)
+	else
+		-- Draw case: notify both players
+		if challengerPlayer then
+			local battleEndEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
+			battleEndEvent:FireClient(challengerPlayer, "Draw! No rewards granted.", 5)
+		end
+		if challengedPlayer then
+			local battleEndEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
+			battleEndEvent:FireClient(challengedPlayer, "Draw! No rewards granted.", 5)
 		end
 	end
 	

@@ -64,7 +64,7 @@ local BATTLE_CONSTANTS = {
 	ATTACK_SPEED_MULTIPLIER = 0.5, -- Slow down attack speed by 50%
 	MOVEMENT_COOLDOWN = 1, -- Seconds between hex movements (faster to allow melee to close)
 	HEX_OCCUPANCY_CHECK_DISTANCE = 3, -- Distance to check for hex occupancy
-	MOVEMENT_TWEEN_TIME = 3.0 -- Time for smooth movement between hexes
+	MOVEMENT_TWEEN_TIME = 2.0 -- Time for smooth movement between hexes
 }
 
 -- Toggle to enable very verbose per-frame attack/range logs
@@ -363,7 +363,7 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 	cfValue.Value = startLook
 	local tweenInfo = TweenInfo.new(
 		BATTLE_CONSTANTS.MOVEMENT_TWEEN_TIME,
-		Enum.EasingStyle.Quad,
+		Enum.EasingStyle.Linear,
 		Enum.EasingDirection.Out,
 		0,
 		false,

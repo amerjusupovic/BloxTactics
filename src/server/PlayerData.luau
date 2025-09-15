@@ -359,6 +359,43 @@ function PlayerDataManager.addExperience(userId: number, amount: number): boolea
 	return true
 end
 
+-- Process a battle result updating win/loss streaks and returning structured result
+-- winnerId: userId of winner (can be nil for draw)
+-- loserId: userId of loser (can be nil for draw)
+-- Returns table or nil if data missing: { winnerId, loserId, winnerLevel, loserLevel, winnerStreak }
+function PlayerDataManager.processBattleResult(winnerId: number?, loserId: number?)
+	-- NOTE: Draws currently grant no rewards and do not modify streaks.
+	-- If future design wants partial rewards for draws, adjust this logic.
+	-- Draw case: reset both streaks (basic approach) and abort rewards
+	if not winnerId or not loserId then
+		if winnerId == nil and loserId == nil then
+			-- full draw: attempt to reset streaks if both players present
+			return nil
+		end
+		return nil
+	end
+
+	local winnerData = playerDataCache[winnerId]
+	local loserData = playerDataCache[loserId]
+	if not winnerData or not loserData then
+		return nil
+	end
+
+	-- Update streaks: increment winner streak, reset loser streak
+	winnerData.streak = (winnerData.streak or 0) + 1
+	loserData.streak = 0
+	winnerData.lastUpdated = os.time()
+	loserData.lastUpdated = os.time()
+
+	return {
+		winnerId = winnerId,
+		loserId = loserId,
+		winnerLevel = winnerData.level or 1,
+		loserLevel = loserData.level or 1,
+		winnerStreak = winnerData.streak or 0
+	}
+end
+
 -- Function to reset player data (for testing purposes)
 function PlayerDataManager.resetPlayerData(userId: number): boolean
 	local player = Players:GetPlayerByUserId(userId)
