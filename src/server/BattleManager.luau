@@ -42,7 +42,9 @@ local BattleUnit = {
 	lastAttackTime = 0,
 	team = 1, -- 1 or 2
 	isAlive = true,
-	originalPosition = Vector3.new(0, 0, 0)
+	originalPosition = Vector3.new(0, 0, 0),
+	originalParent = nil, -- Original parent Instance (expected to be a Hex_ part)
+	originalHexName = nil -- Name of the original hex parent (easier re-parenting on reset)
 }
 
 -- Active battles storage
@@ -95,6 +97,8 @@ local function createBattleUnit(model: Model, unit: DataStructures.Unit, team: n
 		team = team,
 		isAlive = true,
 		originalPosition = model:GetPivot().Position,
+		originalParent = model.Parent,
+		originalHexName = (model.Parent and typeof(model.Parent.Name) == "string" and model.Parent.Name:find("Hex_") and model.Parent.Name) or nil,
 		battleUnitId = uniqueId
 	}
 	
@@ -335,51 +339,53 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 	-- Play move animation for unit
 	local humanoid = unit.model:FindFirstChild("Humanoid")
 	local moveTrack = nil
-    if humanoid and unit.unit.moveAnimationId then
-        local anim = Instance.new("Animation")
-        anim.AnimationId = unit.unit.moveAnimationId
-        moveTrack = humanoid:LoadAnimation(anim)
-        moveTrack:Play()
-    end
-    -- Make the model face the target hex before moving
-    local currentPos = unit.model:GetPivot().Position
-    local targetPos = newPosition + Vector3.new(0, BATTLE_CONSTANTS.UNIT_HEIGHT_OFFSET, 0)
-    local lookAtCFrame = CFrame.new(currentPos, targetPos)
-    unit.model:PivotTo(lookAtCFrame)
-    -- Move the model to the new position with smooth animation
-    local targetCFrame = CFrame.new(targetPos)
-    local primaryPart = unit.model.PrimaryPart
-    if primaryPart then
-        local TweenService = game:GetService("TweenService")
-        local tweenInfo = TweenInfo.new(
-            BATTLE_CONSTANTS.MOVEMENT_TWEEN_TIME, -- Duration
-            Enum.EasingStyle.Quad,
-            Enum.EasingDirection.Out,
-            0,
-            false,
-            0
-        )
-        local tween = TweenService:Create(primaryPart, tweenInfo, {
-            CFrame = targetCFrame
-        })
-        tween.Completed:Connect(function()
-            unit.model:PivotTo(targetCFrame)
-            unit.model.Parent = targetHex
-            releaseHex(targetHex)
-            if moveTrack then
-                moveTrack:Stop()
-            end
-        end)
-        tween:Play()
-    else
-        unit.model:PivotTo(targetCFrame)
-        unit.model.Parent = targetHex
-        releaseHex(targetHex)
-        if moveTrack then
-            moveTrack:Stop()
-        end
-    end
-    print("Unit " .. unit.unit.name .. " moving to hex " .. targetHex.Name)
+	if humanoid and unit.unit.moveAnimationId then
+		local anim = Instance.new("Animation")
+		anim.AnimationId = unit.unit.moveAnimationId
+		moveTrack = humanoid:LoadAnimation(anim)
+		moveTrack:Play()
+	end
+
+	-- Compute yaw-only facing and tween the model's pivot using a CFrameValue
+	local startPos = unit.model:GetPivot().Position
+	local endPos = newPosition + Vector3.new(0, BATTLE_CONSTANTS.UNIT_HEIGHT_OFFSET, 0)
+	local flatTargetStart = Vector3.new(endPos.X, startPos.Y, endPos.Z)
+	local startLook = CFrame.new(startPos, flatTargetStart)
+	local _, startYaw = startLook:ToOrientation()
+	local endLook = CFrame.new(endPos) * CFrame.Angles(0, startYaw, 0)
+
+	-- Set initial facing
+	unit.model:PivotTo(startLook)
+
+	-- Tween pivot to endLook to keep facing
+	local TweenService = game:GetService("TweenService")
+	local cfValue = Instance.new("CFrameValue")
+	cfValue.Value = startLook
+	local tweenInfo = TweenInfo.new(
+		BATTLE_CONSTANTS.MOVEMENT_TWEEN_TIME,
+		Enum.EasingStyle.Quad,
+		Enum.EasingDirection.Out,
+		0,
+		false,
+		0
+	)
+	local tween = TweenService:Create(cfValue, tweenInfo, { Value = endLook })
+	local conn
+	conn = cfValue:GetPropertyChangedSignal("Value"):Connect(function()
+		unit.model:PivotTo(cfValue.Value)
+	end)
+	tween.Completed:Connect(function()
+		if conn then conn:Disconnect() end
+		cfValue:Destroy()
+		unit.model:PivotTo(endLook)
+		unit.model.Parent = targetHex
+		releaseHex(targetHex)
+		if moveTrack then
+			moveTrack:Stop()
+		end
+	end)
+	tween:Play()
+	print("Unit " .. unit.unit.name .. " moving to hex " .. targetHex.Name)
 end
 
 -- Attack target unit
@@ -397,20 +403,25 @@ local function attackTarget(unit: BattleUnit, target: BattleUnit)
 	print("DEBUG: Unit " .. unit.unit.name .. " attacking " .. target.unit.name .. " for " .. actualDamage .. " damage")
 	print("DEBUG: Attacker stats - damage: " .. damage .. ", target armor: " .. armor)
 	
-	-- Play attack animation for attacker and stop move animation if running
-    local attackerHumanoid = unit.model:FindFirstChild("Humanoid")
-    if attackerHumanoid and unit.unit.attackAnimationId then
-        -- Stop move animation if running
-        for _, track in ipairs(attackerHumanoid:GetPlayingAnimationTracks()) do
-            if track.Animation and track.Animation.AnimationId == unit.unit.moveAnimationId then
-                track:Stop()
-            end
-        end
-        local anim = Instance.new("Animation")
-        anim.AnimationId = unit.unit.attackAnimationId
-        local track = attackerHumanoid:LoadAnimation(anim)
-        track:Play()
-    end
+	-- Face the target and play attack animation for attacker
+	local attackerHumanoid = unit.model:FindFirstChild("Humanoid")
+	-- Rotate attacker to face target (yaw-only)
+	local attackerPos = unit.model:GetPivot().Position
+	local targetPos = target.model:GetPivot().Position
+	local faceCFrame = CFrame.new(attackerPos, Vector3.new(targetPos.X, attackerPos.Y, targetPos.Z))
+	unit.model:PivotTo(faceCFrame)
+	if attackerHumanoid and unit.unit.attackAnimationId then
+		-- Stop move animation if running
+		for _, track in ipairs(attackerHumanoid:GetPlayingAnimationTracks()) do
+			if track.Animation and track.Animation.AnimationId == unit.unit.moveAnimationId then
+				track:Stop()
+			end
+		end
+		local anim = Instance.new("Animation")
+		anim.AnimationId = unit.unit.attackAnimationId
+		local track = attackerHumanoid:LoadAnimation(anim)
+		track:Play()
+	end
     
 	-- Find the Humanoid in the target model
 	local humanoid = target.model:FindFirstChild("Humanoid")
@@ -480,6 +491,11 @@ local function resetUnitsAfterBattle(battleData: BattleData)
 	-- Team 1 units (challenged player's original units) - reset to original positions
 	for _, unit in ipairs(battleData.team1) do
 		if unit.model then
+			-- Always ensure core unit identity attributes exist for discovery in the next battle
+			local coreUnitId = unit.unit and unit.unit.id or unit.model:GetAttribute("UnitId")
+			local coreUnitName = unit.unit and unit.unit.name or unit.model:GetAttribute("UnitName")
+			local coreUnitTier = unit.unit and unit.unit.tier or unit.model:GetAttribute("UnitTier")
+
 			-- Restore health and visibility
 			unit.health = unit.maxHealth
 			unit.isAlive = true
@@ -497,18 +513,28 @@ local function resetUnitsAfterBattle(battleData: BattleData)
 						local template = unitModels:FindFirstChild(unit.unit.name)
 						if template then
 							local newModel = template:Clone()
-							-- Apply tier scaling using UnitDatabase
+							-- Name consistently so UnitSpawner removal logic can find it later (looks for underscore)
+							local unitIdForName = coreUnitId or unit.unit.id or tostring(math.random(100000,999999))
+							newModel.Name = (unit.unit.name or coreUnitName or "Unit") .. "_" .. tostring(unitIdForName)
+
+							-- Apply tier scaling using the same approach as UnitSpawner
 							local UnitDatabase = require(game:GetService("ReplicatedStorage").Shared.UnitDatabase)
-							if unit.unit.tier and newModel:FindFirstChild("Scale") then
-								local scale = UnitDatabase.calculateUnitSizeScale(unit.unit.tier)
-								newModel.Scale.Value = scale
+							if unit.unit.tier then
+								local sizeScale = UnitDatabase.calculateUnitSizeScale(unit.unit.tier)
+								newModel:ScaleTo(sizeScale)
 							end
-							-- Parent to the same location as the old model
-							local parent = unit.model.Parent
-							local position = unit.model:GetPivot()
+
+							-- Replace old model
+							local oldParent = unit.model.Parent
+							local oldPivot = unit.model:GetPivot()
 							unit.model:Destroy()
-							newModel.Parent = parent
-							newModel:PivotTo(position)
+							newModel.Parent = oldParent
+							newModel:PivotTo(oldPivot)
+
+							-- Restore essential identification attributes so future battles can discover this unit
+							if coreUnitId then newModel:SetAttribute("UnitId", coreUnitId) end
+							if coreUnitName then newModel:SetAttribute("UnitName", coreUnitName) end
+							if coreUnitTier then newModel:SetAttribute("UnitTier", coreUnitTier) end
 							unit.model = newModel
 							humanoid = newModel:FindFirstChild("Humanoid")
 						else
@@ -524,6 +550,17 @@ local function resetUnitsAfterBattle(battleData: BattleData)
 				unit.model:SetAttribute("IsAlive", true)
 			end
 
+			-- Ensure essential discovery attributes exist even if we didn't replace the model
+			if coreUnitId and unit.model:GetAttribute("UnitId") == nil then
+				unit.model:SetAttribute("UnitId", coreUnitId)
+			end
+			if coreUnitName and unit.model:GetAttribute("UnitName") == nil then
+				unit.model:SetAttribute("UnitName", coreUnitName)
+			end
+			if coreUnitTier and unit.model:GetAttribute("UnitTier") == nil then
+				unit.model:SetAttribute("UnitTier", coreUnitTier)
+			end
+
 			-- Completely reset all visual changes
 			for _, part in pairs(unit.model:GetDescendants()) do
 				if part:IsA("BasePart") then
@@ -531,10 +568,35 @@ local function resetUnitsAfterBattle(battleData: BattleData)
 				end
 			end
 
-			-- Move back to original position
-			local targetCFrame = CFrame.new(unit.originalPosition + Vector3.new(0, BATTLE_CONSTANTS.UNIT_HEIGHT_OFFSET, 0))
-			unit.model:PivotTo(targetCFrame)
-			unit.position = unit.originalPosition
+			-- Clear temporary battle attributes on the model
+			unit.model:SetAttribute("BattleUnit", nil)
+			unit.model:SetAttribute("Team", nil)
+			unit.model:SetAttribute("BattleUnitId", nil)
+
+			-- Reparent back to the original hex if possible (so removal and future moves work reliably)
+			local targetHex: Instance? = nil
+			if unit.originalHexName then
+				targetHex = battleData.arena:FindFirstChild(unit.originalHexName)
+			end
+			if not targetHex then
+				-- Fallback to closest hex to the original position
+				targetHex = findClosestHex(battleData.arena, unit.originalPosition)
+			end
+			if targetHex then
+				unit.model.Parent = targetHex
+				-- Position feet on hex surface similar to UnitSpawner
+				local hexCFrame = (targetHex :: any).CFrame
+				local unitSize = unit.model:GetExtentsSize()
+				local heightOffset = unitSize.Y / 2
+				local adjustedCFrame = CFrame.new(hexCFrame.Position + Vector3.new(0, heightOffset, 0))
+				unit.model:PivotTo(adjustedCFrame)
+				unit.position = unit.originalPosition
+			else
+				-- As a last resort, move back to original world position with a small offset
+				local targetCFrame = CFrame.new(unit.originalPosition + Vector3.new(0, BATTLE_CONSTANTS.UNIT_HEIGHT_OFFSET, 0))
+				unit.model:PivotTo(targetCFrame)
+				unit.position = unit.originalPosition
+			end
 
 			print("Reset unit " .. unit.unit.name .. " to original state")
 		end
@@ -734,12 +796,19 @@ function BattleManager.startBattle(challengeId: string, player1Id: number, playe
 	end
 	for i, unit in ipairs(battleData.team2) do
 		print("[DEBUG] Team 2 Unit " .. tostring(i) .. ": " .. unit.unit.name .. " Position: " .. tostring(unit.position))
+		-- Turn enemy units around 180 degrees on Y axis to face the other side
+		if unit.model then
+			local pivot = unit.model:GetPivot()
+			local rotated = pivot * CFrame.Angles(0, math.pi, 0)
+			unit.model:PivotTo(rotated)
+		end
 	end
 	
-	-- Start the battle
+	-- Start the battle with a short delay to allow teleports to settle
+	wait(2)
 	battleData.status = "in_progress"
 	battleData.startTime = tick()
-	
+
 	-- Start the battle loop
 	runBattleLoop(battleData)
 	

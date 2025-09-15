@@ -262,10 +262,15 @@ function UnitSpawner.removeUnitFromBoard(userId: number, position: Vector2)
 	-- Remove all unit models from this hex
 	local removedCount = 0
 	for _, child in pairs(hex:GetChildren()) do
-		if child:IsA("Model") and child.Name:find("_") then
-			print("Removing unit model:", child.Name)
-			child:Destroy()
-			removedCount = removedCount + 1
+		if child:IsA("Model") then
+			-- Identify a unit model either by underscore naming OR by presence of unit attributes
+			local hasUnderscore = child.Name:find("_") ~= nil
+			local hasUnitAttrs = child:GetAttribute("UnitId") ~= nil or child:GetAttribute("UnitName") ~= nil or child:GetAttribute("UnitTier") ~= nil
+			if hasUnderscore or hasUnitAttrs then
+				print("Removing unit model:", child.Name, " criteria:", hasUnderscore and "underscore" or "attrs")
+				child:Destroy()
+				removedCount = removedCount + 1
+			end
 		end
 	end
 	
@@ -305,10 +310,14 @@ function UnitSpawner.removeUnitFromBench(userId: number, benchSlot: number)
 	-- Remove all unit models from this bench slot
 	local removedCount = 0
 	for _, child in pairs(bench:GetChildren()) do
-		if child:IsA("Model") and child.Name:find("_") then
-			print("Removing unit model:", child.Name)
-			child:Destroy()
-			removedCount = removedCount + 1
+		if child:IsA("Model") then
+			local hasUnderscore = child.Name:find("_") ~= nil
+			local hasUnitAttrs = child:GetAttribute("UnitId") ~= nil or child:GetAttribute("UnitName") ~= nil or child:GetAttribute("UnitTier") ~= nil
+			if hasUnderscore or hasUnitAttrs then
+				print("Removing unit model:", child.Name, " criteria:", hasUnderscore and "underscore" or "attrs")
+				child:Destroy()
+				removedCount = removedCount + 1
+			end
 		end
 	end
 	
@@ -409,10 +418,14 @@ function UnitSpawner.clearPlayerUnits(userId: number)
 	for _, child in pairs(grassArena:GetChildren()) do
 		if child.Name:find("Hex_") then
 			for _, unitModel in pairs(child:GetChildren()) do
-				if unitModel:IsA("Model") and unitModel.Name:find("_") then
-					print("Removing board unit:", unitModel.Name, "from", child.Name)
-					unitModel:Destroy()
-					totalRemoved = totalRemoved + 1
+				if unitModel:IsA("Model") then
+					local hasUnderscore = unitModel.Name:find("_") ~= nil
+					local hasUnitAttrs = unitModel:GetAttribute("UnitId") ~= nil or unitModel:GetAttribute("UnitName") ~= nil or unitModel:GetAttribute("UnitTier") ~= nil
+					if hasUnderscore or hasUnitAttrs then
+						print("Removing board unit:", unitModel.Name, "from", child.Name)
+						unitModel:Destroy()
+						totalRemoved = totalRemoved + 1
+					end
 				end
 			end
 		end
@@ -422,10 +435,14 @@ function UnitSpawner.clearPlayerUnits(userId: number)
 	for _, child in pairs(grassArena:GetChildren()) do
 		if child.Name:find("Bench_") then
 			for _, unitModel in pairs(child:GetChildren()) do
-				if unitModel:IsA("Model") and unitModel.Name:find("_") then
-					print("Removing bench unit:", unitModel.Name, "from", child.Name)
-					unitModel:Destroy()
-					totalRemoved = totalRemoved + 1
+				if unitModel:IsA("Model") then
+					local hasUnderscore = unitModel.Name:find("_") ~= nil
+					local hasUnitAttrs = unitModel:GetAttribute("UnitId") ~= nil or unitModel:GetAttribute("UnitName") ~= nil or unitModel:GetAttribute("UnitTier") ~= nil
+					if hasUnderscore or hasUnitAttrs then
+						print("Removing bench unit:", unitModel.Name, "from", child.Name)
+						unitModel:Destroy()
+						totalRemoved = totalRemoved + 1
+					end
 				end
 			end
 		end
