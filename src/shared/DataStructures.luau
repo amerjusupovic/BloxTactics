@@ -18,7 +18,8 @@ export type PlayerData = {
 	benchState: BenchState,
 	shopState: ShopState?,
 	streak: number, -- win/loss streak
-	lastUpdated: number
+	lastUpdated: number,
+	selectedArenaName: string? -- Name of currently selected arena (e.g., "Grass Arena")
 }
 
 -- Unit data structure

@@ -23,6 +23,7 @@ local boardFrame = nil
 local benchFrame = nil
 local statsFrame = nil
 local sellUnitFrame = nil
+local editArenaFrame = nil
 
 -- UI state variables
 local shopVisible = false
@@ -65,6 +66,7 @@ function UI.createMainUI()
 	benchFrame = mainFrame:FindFirstChild("BenchFrame")
 	statsFrame = mainFrame:FindFirstChild("StatsFrame")
 	sellUnitFrame = mainFrame:FindFirstChild("SellUnitFrame")
+	editArenaFrame = mainFrame:FindFirstChild("EditArenaFrame")
 	
 	print("UI frames found:")
 	print("  shopFrame:", shopFrame and "YES" or "NO")
@@ -72,11 +74,16 @@ function UI.createMainUI()
 	print("  benchFrame:", benchFrame and "YES" or "NO")
 	print("  statsFrame:", statsFrame and "YES" or "NO")
 	print("  sellUnitFrame:", sellUnitFrame and "YES" or "NO")
+	print("  editArenaFrame:", editArenaFrame and "YES" or "NO")
 	
 	-- Verify all frames exist
 	if not shopFrame or not boardFrame or not benchFrame or not statsFrame or not sellUnitFrame then
 		warn("One or more UI frames not found in UI!")
 		return
+	end
+	-- EditArenaFrame is optional for now; if missing we log but continue
+	if not editArenaFrame then
+		warn("EditArenaFrame not found (will only matter when triggering edit arena)")
 	end
 	print("All UI frames found successfully!")
 	
@@ -114,6 +121,122 @@ function UI.createMainUI()
 	end
 	
 	print("UI created successfully from existing ReplicatedStorage elements!")
+end
+
+-- Show Edit Arena Frame
+function UI.showEditArenaFrame()
+	print("UI.showEditArenaFrame() called")
+	if not editArenaFrame then
+		warn("EditArenaFrame not available in UI")
+		return
+	end
+	-- Fade in animation
+	editArenaFrame.Visible = true
+	editArenaFrame.Active = true
+	editArenaFrame.Selectable = true
+
+	-- Store original transparency values once
+	if not editArenaFrame:GetAttribute("OrigBgTransparency") then
+		editArenaFrame:SetAttribute("OrigBgTransparency", editArenaFrame.BackgroundTransparency)
+		-- Capture descendant text/image transparency so we can restore gracefully
+		for _, desc in ipairs(editArenaFrame:GetDescendants()) do
+			if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("ImageLabel") or desc:IsA("ImageButton") then
+				if desc.BackgroundTransparency ~= nil then
+					desc:SetAttribute("OrigBgTransparency", desc.BackgroundTransparency)
+				end
+				if (desc:IsA("TextLabel") or desc:IsA("TextButton")) and desc.TextTransparency ~= nil then
+					desc:SetAttribute("OrigTextTransparency", desc.TextTransparency)
+				end
+				if (desc:IsA("ImageLabel") or desc:IsA("ImageButton")) and desc.ImageTransparency ~= nil then
+					desc:SetAttribute("OrigImageTransparency", desc.ImageTransparency)
+				end
+			end
+		end
+	end
+
+	-- Cancel any running hide tween by clearing attribute
+	editArenaFrame:SetAttribute("FadeState", "showing")
+
+	local TweenService = game:GetService("TweenService")
+	local tweenInfo = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+	-- Initialize to fully transparent before fade if first show after hide
+	editArenaFrame.BackgroundTransparency = 1
+	for _, desc in ipairs(editArenaFrame:GetDescendants()) do
+		if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("ImageLabel") or desc:IsA("ImageButton") then
+			if desc:GetAttribute("OrigBgTransparency") then desc.BackgroundTransparency = 1 end
+			if desc:GetAttribute("OrigTextTransparency") then desc.TextTransparency = 1 end
+			if desc:GetAttribute("OrigImageTransparency") then desc.ImageTransparency = 1 end
+		end
+	end
+
+	-- Tween frame itself
+	TweenService:Create(editArenaFrame, tweenInfo, {
+		BackgroundTransparency = editArenaFrame:GetAttribute("OrigBgTransparency") or 0
+	}):Play()
+
+	-- Tween descendants
+	for _, desc in ipairs(editArenaFrame:GetDescendants()) do
+		if desc:IsA("TextLabel") or desc:IsA("TextButton") then
+			local targetBg = desc:GetAttribute("OrigBgTransparency") or desc.BackgroundTransparency
+			local targetText = desc:GetAttribute("OrigTextTransparency") or 0
+			TweenService:Create(desc, tweenInfo, {
+				BackgroundTransparency = targetBg,
+				TextTransparency = targetText
+			}):Play()
+		elseif desc:IsA("ImageLabel") or desc:IsA("ImageButton") then
+			local targetBg = desc:GetAttribute("OrigBgTransparency") or desc.BackgroundTransparency
+			local targetImg = desc:GetAttribute("OrigImageTransparency") or 0
+			TweenService:Create(desc, tweenInfo, {
+				BackgroundTransparency = targetBg,
+				ImageTransparency = targetImg
+			}):Play()
+		end
+	end
+
+	print("EditArenaFrame fade-in started")
+end
+
+-- Hide Edit Arena Frame (can be bound to ESC or a close button)
+function UI.hideEditArenaFrame()
+	if editArenaFrame then
+		local TweenService = game:GetService("TweenService")
+		editArenaFrame:SetAttribute("FadeState", "hiding")
+		local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+
+		-- Make it non-interactive immediately during fade
+		editArenaFrame.Active = false
+		editArenaFrame.Selectable = false
+
+		local totalTweens = 0
+		local completed = 0
+
+		local function registerTween(tween)
+			totalTweens += 1
+			tween.Completed:Connect(function()
+				completed += 1
+				if completed == totalTweens then
+					-- Only hide if we are still in hiding state (wasn't re-shown mid-fade)
+					if editArenaFrame and editArenaFrame:GetAttribute("FadeState") == "hiding" then
+						editArenaFrame.Visible = false
+					end
+				end
+			end)
+			tween:Play()
+		end
+
+		-- Frame tween
+		registerTween(TweenService:Create(editArenaFrame, tweenInfo, {BackgroundTransparency = 1}))
+
+		-- Descendant tweens
+		for _, desc in ipairs(editArenaFrame:GetDescendants()) do
+			if desc:IsA("TextLabel") or desc:IsA("TextButton") then
+				registerTween(TweenService:Create(desc, tweenInfo, {BackgroundTransparency = 1, TextTransparency = 1}))
+			elseif desc:IsA("ImageLabel") or desc:IsA("ImageButton") then
+				registerTween(TweenService:Create(desc, tweenInfo, {BackgroundTransparency = 1, ImageTransparency = 1}))
+			end
+		end
+	end
 end
 
 -- Function to update player stats display

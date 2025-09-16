@@ -54,17 +54,18 @@ Constants.CHALLENGE_TIMEOUT = 60 -- seconds
 Constants.UI_UPDATE_RATE = 0.1 -- seconds
 
 -- Arena and Lobby constants
-Constants.GROUND_LEVEL = 0
-Constants.ARENA_SPACING = 300
+Constants.DEFAULT_ARENA_NAME = "Grass Arena" -- Players start with this arena; must exist in ReplicatedStorage.Arenas
+Constants.GROUND_LEVEL = 3.16
+Constants.ARENA_SPACING = 250
 Constants.LOBBY_SPACING = 2000
 Constants.MAX_PLAYERS_PER_LOBBY = 6
 Constants.PLAYER_SPAWN_FORWARD_OFFSET = -135 
 
 -- Board Detection constants
-Constants.BOARD_DETECTION_ZONE_SIZE = Vector3.new(180, 10, 180) -- 90 unit radius detection zone
+Constants.BOARD_DETECTION_ZONE_SIZE = Vector3.new(200, 10, 200) -- 100 unit radius detection zone
 Constants.BOARD_DETECTION_ZONE_HEIGHT = 5 -- Height above ground
 Constants.BOARD_DETECTION_ZONE_FORWARD_OFFSET = -40 -- Move back 40 units in Z direction
-Constants.BOARD_DETECTION_ZONE_RADIUS = 90 -- Detection radius in units
+Constants.BOARD_DETECTION_ZONE_RADIUS = 100 -- Detection radius in units
 
 -- Network constants
 Constants.REMOTE_EVENT_NAMES = {
@@ -89,7 +90,9 @@ Constants.REMOTE_EVENT_NAMES = {
 	UPDATE_SHOP = "UpdateShop",
 	UPDATE_BENCH = "UpdateBench",
 	SHOW_NOTIFICATION = "ShowNotification",
-	RESET_PLAYER_DATA = "ResetPlayerData"
+	RESET_PLAYER_DATA = "ResetPlayerData",
+	SHOW_EDIT_ARENA_FRAME = "ShowEditArenaFrame",
+	HIDE_EDIT_ARENA_FRAME = "HideEditArenaFrame"
 }
 
 return Constants

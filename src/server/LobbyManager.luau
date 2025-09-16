@@ -304,9 +304,9 @@ end
 
 -- Function to initialize a player in a specific lobby
 function LobbyManager.initializePlayerInLobby(playerId: number, player: Player, lobbyData: any, playerIndex: number)
-	-- Create the player's arena structure
-	local grassArena = lobbyData.arenaSpawner:createGrassArena(playerId, player.Name, playerIndex)
-	if not grassArena then
+	-- Create the player's arena structure (generalized)
+	local playerArena = lobbyData.arenaSpawner:createPlayerArena(playerId, player.Name, playerIndex)
+	if not playerArena then
 		warn("Failed to create arena for player " .. player.Name .. " in lobby " .. lobbyData.lobbyId)
 		return
 	end
@@ -356,7 +356,7 @@ function LobbyManager.initializePlayerInLobby(playerId: number, player: Player, 
 		UnitSpawner.spawnExistingUnits(playerId, playerData)
 	end)
 	
-	print("Created arena for player " .. player.Name .. " in lobby " .. lobbyData.lobbyId)
+	print("Created arena '" .. playerArena.Name .. "' for player " .. player.Name .. " in lobby " .. lobbyData.lobbyId)
 end
 
 -- Function to remove a player from their lobby

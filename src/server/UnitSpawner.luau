@@ -11,7 +11,7 @@ local UnitSpawner = {}
 local unitModels = {}
 
 -- Helper function to find player arena in any lobby
-local function findPlayerArena(userId: number): (Folder?, Folder?)
+local function findPlayerArena(userId: number): (Folder?, Instance?)
 	-- Search through all lobby folders in the main workspace to find the player's arena
 	for _, child in pairs(workspace:GetChildren()) do
 		if child.Name:find("Lobby_") then
@@ -19,9 +19,10 @@ local function findPlayerArena(userId: number): (Folder?, Folder?)
 			if spawnPoints then
 				local playerFolder = spawnPoints:FindFirstChild(tostring(userId))
 				if playerFolder then
-					local grassArena = playerFolder:FindFirstChild("Grass Arena")
-					if grassArena then
-						return playerFolder, grassArena
+					for _, arenaCandidate in pairs(playerFolder:GetChildren()) do
+						if arenaCandidate.Name:match("%sArena$") then
+							return playerFolder, arenaCandidate
+						end
 					end
 				end
 			end
@@ -66,7 +67,7 @@ function UnitSpawner.spawnUnitOnBoard(userId: number, unit: any, position: Vecto
 	print("Parameters - UserId:", userId, "Unit:", unit.name, "Position:", position)
 	
 	-- Find the player's arena in the current workspace
-	local playerFolder, grassArena = findPlayerArena(userId)
+	local playerFolder, arena = findPlayerArena(userId)
 	if not playerFolder then
 		warn("Player folder not found for: " .. userId)
 		print("=== UnitSpawner.spawnUnitOnBoard FAILED - No player folder ===")
@@ -74,12 +75,12 @@ function UnitSpawner.spawnUnitOnBoard(userId: number, unit: any, position: Vecto
 	end
 	print("Player folder found:", playerFolder.Name)
 	
-	if not grassArena then
-		warn("Grass Arena not found for player: " .. userId)
-		print("=== UnitSpawner.spawnUnitOnBoard FAILED - No Grass Arena ===")
+	if not arena then
+		warn("Arena not found for player: " .. userId)
+		print("=== UnitSpawner.spawnUnitOnBoard FAILED - No Arena ===")
 		return nil
 	end
-	print("Grass Arena found:", grassArena.Name)
+	print("Arena found:", arena.Name)
 	
 	-- Find the board hex (convert position to hex name)
 	-- Position (3, 3) should map to Hex_4_4 (client expectation)
@@ -88,7 +89,7 @@ function UnitSpawner.spawnUnitOnBoard(userId: number, unit: any, position: Vecto
 	local hexCol = position.X + 1
 	local hexName = "Hex_" .. hexRow .. "_" .. hexCol
 	
-	local hex = grassArena:FindFirstChild(hexName)
+	local hex = arena:FindFirstChild(hexName)
 	if not hex then
 		warn("Board hex not found for position: " .. tostring(position) .. " (looking for " .. hexName .. ")")
 		print("=== UnitSpawner.spawnUnitOnBoard FAILED - No board hex ===")
@@ -153,21 +154,21 @@ function UnitSpawner.spawnUnitOnBench(userId: number, unit: any, benchSlot: numb
 	print("Unit object:", unit)
 	
 	-- Find the player's arena in the current workspace
-	local playerFolder, grassArena = findPlayerArena(userId)
+	local playerFolder, arena = findPlayerArena(userId)
 	if not playerFolder then
 		warn("Player folder not found for: " .. userId)
 		print("=== UnitSpawner.spawnUnitOnBench FAILED - No player folder ===")
 		return nil
 	end
 	
-	if not grassArena then
-		warn("Grass Arena not found for player: " .. userId)
-		print("=== UnitSpawner.spawnUnitOnBench FAILED - No Grass Arena ===")
+	if not arena then
+		warn("Arena not found for player: " .. userId)
+		print("=== UnitSpawner.spawnUnitOnBench FAILED - No Arena ===")
 		return nil
 	end
 	
 	-- Find the bench spot
-	local bench = grassArena:FindFirstChild("Bench_" .. benchSlot)
+	local bench = arena:FindFirstChild("Bench_" .. benchSlot)
 	if not bench then
 		warn("Bench slot not found: " .. benchSlot .. " for player: " .. userId)
 		print("=== UnitSpawner.spawnUnitOnBench FAILED - No bench slot ===")
@@ -233,16 +234,16 @@ function UnitSpawner.removeUnitFromBoard(userId: number, position: Vector2)
 	print("Parameters - UserId:", userId, "Position:", position)
 	
 	-- Find the player's arena in the current workspace
-	local playerFolder, grassArena = findPlayerArena(userId)
+	local playerFolder, arena = findPlayerArena(userId)
 	if not playerFolder then
 		warn("Player folder not found for: " .. userId)
 		print("=== UnitSpawner.removeUnitFromBoard FAILED - No player folder ===")
 		return
 	end
 	
-	if not grassArena then
-		warn("Grass Arena not found for player: " .. userId)
-		print("=== UnitSpawner.removeUnitFromBoard FAILED - No Grass Arena ===")
+	if not arena then
+		warn("Arena not found for player: " .. userId)
+		print("=== UnitSpawner.removeUnitFromBoard FAILED - No Arena ===")
 		return
 	end
 	
@@ -252,7 +253,7 @@ function UnitSpawner.removeUnitFromBoard(userId: number, position: Vector2)
 	local hexCol = position.X + 1
 	local hexName = "Hex_" .. hexRow .. "_" .. hexCol
 	
-	local hex = grassArena:FindFirstChild(hexName)
+	local hex = arena:FindFirstChild(hexName)
 	if not hex then
 		warn("Board hex not found for position: " .. tostring(position) .. " (looking for " .. hexName .. ")")
 		print("=== UnitSpawner.removeUnitFromBoard FAILED - No board hex ===")
@@ -286,21 +287,21 @@ function UnitSpawner.removeUnitFromBench(userId: number, benchSlot: number)
 	print("Parameters - UserId:", userId, "BenchSlot:", benchSlot)
 	
 	-- Find the player's arena in the current workspace
-	local playerFolder, grassArena = findPlayerArena(userId)
+	local playerFolder, arena = findPlayerArena(userId)
 	if not playerFolder then
 		warn("Player folder not found for: " .. userId)
 		print("=== UnitSpawner.removeUnitFromBench FAILED - No player folder ===")
 		return
 	end
 	
-	if not grassArena then
-		warn("Grass Arena not found for player: " .. userId)
-		print("=== UnitSpawner.removeUnitFromBench FAILED - No Grass Arena ===")
+	if not arena then
+		warn("Arena not found for player: " .. userId)
+		print("=== UnitSpawner.removeUnitFromBench FAILED - No Arena ===")
 		return
 	end
 	
 	-- Find the bench spot
-	local bench = grassArena:FindFirstChild("Bench_" .. benchSlot)
+	local bench = arena:FindFirstChild("Bench_" .. benchSlot)
 	if not bench then
 		warn("Bench slot not found: " .. benchSlot .. " for player: " .. userId)
 		print("=== UnitSpawner.removeUnitFromBench FAILED - No bench slot ===")
@@ -333,23 +334,23 @@ function UnitSpawner.moveUnitBetweenBenchSlots(userId: number, fromSlot: number,
 	print("Parameters - UserId:", userId, "FromSlot:", fromSlot, "ToSlot:", toSlot)
 	
 	-- Find the player's arena in the current workspace
-	local playerFolder, grassArena = findPlayerArena(userId)
+	local playerFolder, arena = findPlayerArena(userId)
 	if not playerFolder then
 		warn("Player folder not found for: " .. userId)
 		print("=== UnitSpawner.moveUnitBetweenBenchSlots FAILED - No player folder ===")
 		return
 	end
 	
-	if not grassArena then
-		warn("Grass Arena not found for player: " .. userId)
-		print("=== UnitSpawner.moveUnitBetweenBenchSlots FAILED - No Grass Arena ===")
+	if not arena then
+		warn("Arena not found for player: " .. userId)
+		print("=== UnitSpawner.moveUnitBetweenBenchSlots FAILED - No Arena ===")
 		return
 	end
-	print("Grass Arena found:", grassArena.Name)
+	print("Arena found:", arena.Name)
 	
 	-- Find the bench spots
-	local fromBench = grassArena:FindFirstChild("Bench_" .. fromSlot)
-	local toBench = grassArena:FindFirstChild("Bench_" .. toSlot)
+	local fromBench = arena:FindFirstChild("Bench_" .. fromSlot)
+	local toBench = arena:FindFirstChild("Bench_" .. toSlot)
 	
 	if not fromBench or not toBench then
 		warn("Bench spots not found - From: " .. fromSlot .. ", To: " .. toSlot)
@@ -399,23 +400,23 @@ function UnitSpawner.clearPlayerUnits(userId: number)
 	print("Parameters - UserId:", userId)
 	
 	-- Find the player's arena in the current workspace
-	local playerFolder, grassArena = findPlayerArena(userId)
+	local playerFolder, arena = findPlayerArena(userId)
 	if not playerFolder then
 		warn("PlayerFolder not found for: " .. userId)
 		print("=== UnitSpawner.clearPlayerUnits FAILED - No player folder ===")
 		return
 	end
 	
-	if not grassArena then
-		warn("Grass Arena not found for player: " .. userId)
-		print("=== UnitSpawner.clearPlayerUnits FAILED - No Grass Arena ===")
+	if not arena then
+		warn("Arena not found for player: " .. userId)
+		print("=== UnitSpawner.clearPlayerUnits FAILED - No Arena ===")
 		return
 	end
 	
 	local totalRemoved = 0
 	
 	-- Clear units from board hexes
-	for _, child in pairs(grassArena:GetChildren()) do
+	for _, child in pairs(arena:GetChildren()) do
 		if child.Name:find("Hex_") then
 			for _, unitModel in pairs(child:GetChildren()) do
 				if unitModel:IsA("Model") then
@@ -432,7 +433,7 @@ function UnitSpawner.clearPlayerUnits(userId: number)
 	end
 	
 	-- Clear units from bench spots
-	for _, child in pairs(grassArena:GetChildren()) do
+	for _, child in pairs(arena:GetChildren()) do
 		if child.Name:find("Bench_") then
 			for _, unitModel in pairs(child:GetChildren()) do
 				if unitModel:IsA("Model") then

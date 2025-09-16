@@ -43,7 +43,8 @@ local function createDefaultPlayerData(userId: number, username: string): Player
 			currentCapacity = 0
 		},
 		streak = 0,
-		lastUpdated = os.time()
+		lastUpdated = os.time(),
+		selectedArenaName = Constants.DEFAULT_ARENA_NAME -- default arena
 	}
 end
 
@@ -110,7 +111,8 @@ function PlayerDataManager.serializePlayerData(playerData: PlayerData): {[string
 		experience = playerData.experience,
 		gold = playerData.gold,
 		streak = playerData.streak,
-		lastUpdated = playerData.lastUpdated
+		lastUpdated = playerData.lastUpdated,
+		selectedArenaName = playerData.selectedArenaName
 	}
 	
 	-- Serialize shop state if it exists
@@ -183,7 +185,8 @@ function PlayerDataManager.deserializePlayerData(serialized: {[string]: any}): P
 		experience = serialized.experience,
 		gold = serialized.gold,
 		streak = serialized.streak,
-		lastUpdated = serialized.lastUpdated
+		lastUpdated = serialized.lastUpdated,
+		selectedArenaName = serialized.selectedArenaName or Constants.DEFAULT_ARENA_NAME
 	}
 	
 	-- Deserialize shop state if it exists

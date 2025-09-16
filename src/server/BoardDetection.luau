@@ -28,9 +28,15 @@ function BoardDetection.createBoardArea(playerId: number, playerName: string, lo
 		return nil
 	end
 	
-	local grassArena = playerFolder:FindFirstChild("Grass Arena")
+	local grassArena
+	for _, child in pairs(playerFolder:GetChildren()) do
+		if child.Name:match("%sArena$") then
+			grassArena = child
+			break
+		end
+	end
 	if not grassArena then
-		warn("Grass Arena not found for player " .. playerName .. " in lobby")
+		warn("Arena not found for player " .. playerName .. " in lobby")
 		return nil
 	end
 	

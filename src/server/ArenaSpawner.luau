@@ -5,6 +5,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Constants = require(game.ReplicatedStorage.Shared.Constants)
+local PlayerData = require(script.Parent.PlayerData)
 
 local ArenaSpawner = {}
 
@@ -60,8 +61,9 @@ function ArenaSpawner:createLobbyBaseplate(lobbyId: number): BasePart?
 	return baseplate
 end
 
--- Function to create a grass arena for a player
-function ArenaSpawner:createGrassArena(playerId: number, playerName: string, playerIndex: number): Model?
+-- Function to create an arena for a player (generalized)
+-- Will use player's selectedArenaName if present, else default
+function ArenaSpawner:createPlayerArena(playerId: number, playerName: string, playerIndex: number): Model?
 	local spawnPoints = self.spawnPoints
 	if not spawnPoints then
 		warn("No spawn points folder found for arena creation")
@@ -77,17 +79,31 @@ function ArenaSpawner:createGrassArena(playerId: number, playerName: string, pla
 		print("Created player folder for " .. playerName .. " (ID: " .. playerId .. ")")
 	end
 	
-	-- Get the Grass Arena model from ReplicatedStorage
-	local grassArenaModel = ReplicatedStorage:FindFirstChild("Arenas"):FindFirstChild("Grass Arena")
-	if not grassArenaModel then
-		warn("Grass Arena model not found in ReplicatedStorage.Arenas")
+	-- Determine which arena to spawn
+	local playerData = PlayerData.getPlayerData(playerId)
+	local arenaName = (playerData and playerData.selectedArenaName) or Constants.DEFAULT_ARENA_NAME
+
+	-- Fetch arena model folder
+	local arenasFolder = ReplicatedStorage:FindFirstChild("Arenas")
+	if not arenasFolder then
+		warn("Arenas folder not found in ReplicatedStorage")
 		return nil
 	end
-	
-	-- Clone the existing Grass Arena model
-	print("Cloning Grass Arena for player " .. playerName)
-	local clonedArena = grassArenaModel:Clone()
-	clonedArena.Name = "Grass Arena"
+
+	local arenaTemplate = arenasFolder:FindFirstChild(arenaName)
+	if not arenaTemplate then
+		warn("Arena template '" .. arenaName .. "' not found. Falling back to default arena.")
+		arenaName = Constants.DEFAULT_ARENA_NAME
+		arenaTemplate = arenasFolder:FindFirstChild(arenaName)
+		if not arenaTemplate then
+			warn("Default arena template '" .. arenaName .. "' also not found.")
+			return nil
+		end
+	end
+
+	print("Cloning arena '" .. arenaName .. "' for player " .. playerName)
+	local clonedArena = arenaTemplate:Clone()
+	clonedArena.Name = arenaName
 	
 	-- Position the arena for this player based on lobby ID
 	-- Each lobby gets a different position to avoid overlap
@@ -171,8 +187,107 @@ function ArenaSpawner:createGrassArena(playerId: number, playerName: string, pla
 		actualPosition = arenaPosition
 	end
 	
-	print("Successfully cloned Grass Arena for player " .. playerName .. " at position " .. tostring(arenaPosition))
+	print("Successfully cloned arena '" .. arenaName .. "' for player " .. playerName .. " at position " .. tostring(arenaPosition))
 	print("Actual arena position: " .. tostring(actualPosition))
+
+	-- Set up Edit Arena interaction supporting either a single BasePart or a Model named 'Edit Arena'
+	local editContainer = clonedArena:FindFirstChild("Edit Arena")
+	if editContainer then
+		local RemoteEvents = require(script.Parent.RemoteEvents)
+		local showEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_EDIT_ARENA_FRAME)
+		local hideEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.HIDE_EDIT_ARENA_FRAME)
+		local active = false
+		local monitoring = false
+		local DEBOUNCE_TIME = 1
+		local lastTouch = 0
+
+		-- Collect all base parts that should trigger interaction
+		local triggerParts = {}
+		if editContainer:IsA("BasePart") then
+			triggerParts = {editContainer}
+		elseif editContainer:IsA("Model") or editContainer:IsA("Folder") then
+			for _, desc in ipairs(editContainer:GetDescendants()) do
+				if desc:IsA("BasePart") then
+					table.insert(triggerParts, desc)
+				end
+			end
+		end
+
+		if #triggerParts == 0 then
+			warn("'Edit Arena' found but contains no BaseParts to trigger interaction for player " .. playerName)
+		else
+			print("Setting up Edit Arena interaction with " .. #triggerParts .. " trigger part(s) for player " .. playerName)
+		end
+
+		-- Helper to get representative position of container (primary part / average)
+		local function getEditPosition(): Vector3
+			if editContainer:IsA("BasePart") then
+				return editContainer.Position
+			end
+			if editContainer:IsA("Model") then
+				if editContainer.PrimaryPart then
+					return editContainer.PrimaryPart.Position
+				end
+				-- compute average of all parts
+				local sum = Vector3.new(0,0,0)
+				local count = 0
+				for _, p in ipairs(triggerParts) do
+					sum += p.Position
+					count += 1
+				end
+				if count > 0 then
+					return sum / count
+				end
+			end
+			-- fallback
+			if triggerParts[1] then return triggerParts[1].Position end
+			return clonedArena.PrimaryPart and clonedArena.PrimaryPart.Position or actualPosition
+		end
+
+		local function startMonitoring(player: Player, humanoidRootPart: BasePart)
+			if monitoring then return end
+			monitoring = true
+			spawn(function()
+				while active and humanoidRootPart.Parent and humanoidRootPart.Parent.Parent do
+					local distance = (humanoidRootPart.Position - getEditPosition()).Magnitude
+					if distance > 20 then
+						if hideEvent then hideEvent:FireClient(player) end
+						active = false
+						break
+					end
+					wait(0.5)
+				end
+				monitoring = false
+			end)
+		end
+
+		local function onTouched(hit: BasePart)
+			local now = os.clock()
+			if now - lastTouch < DEBOUNCE_TIME then return end
+			local character = hit.Parent
+			if not character then return end
+			local humanoid = character:FindFirstChildOfClass("Humanoid")
+			if not humanoid then return end
+			local player = game.Players:GetPlayerFromCharacter(character)
+			if not player or player.UserId ~= playerId then return end
+			local hrp = character:FindFirstChild("HumanoidRootPart")
+			if not hrp then return end
+			lastTouch = now
+			if not active then
+				active = true
+				if showEvent then showEvent:FireClient(player) end
+				startMonitoring(player, hrp)
+			else
+				startMonitoring(player, hrp)
+			end
+		end
+
+		for _, part in ipairs(triggerParts) do
+			part.Touched:Connect(onTouched)
+		end
+	else
+		print("No 'Edit Arena' part/model found in arena '" .. arenaName .. "' for player " .. playerName)
+	end
 	return clonedArena
 end
 
@@ -197,8 +312,12 @@ function ArenaSpawner:removeArena(playerId: number)
 		
 		-- Count remaining arenas in this lobby
 		for _, child in pairs(spawnPoints:GetChildren()) do
-			if child:FindFirstChild("Grass Arena") then
+			-- Count if any child contains an arena (child with name ending in ' Arena')
+			for _, arenaChild in pairs(child:GetChildren()) do
+				if arenaChild.Name:match("%sArena$") then
 				remainingArenas = remainingArenas + 1
+				break
+			end
 			end
 		end
 		
@@ -222,8 +341,13 @@ function ArenaSpawner:getArena(playerId: number): Folder?
 	if not playerFolder then
 		return nil
 	end
-	
-	return playerFolder:FindFirstChild("Grass Arena")
+	-- Return first child whose name ends with ' Arena'
+	for _, child in pairs(playerFolder:GetChildren()) do
+		if child.Name:match("%sArena$") then
+			return child
+		end
+	end
+	return nil
 end
 
 -- Function to get enemy board for a player

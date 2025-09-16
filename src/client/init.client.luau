@@ -64,7 +64,7 @@ local function setupRemoteEventHandlers()
 	showNotificationEvent.OnClientEvent:Connect(function(message, duration)
 		UI.showNotification(message, duration)
 	end)
-	
+
 	-- Handle challenge prompt events
 	local showChallengePromptEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.SHOW_CHALLENGE_PROMPT)
 	showChallengePromptEvent.OnClientEvent:Connect(function(boardOwnerId, boardOwnerName)
@@ -77,6 +77,18 @@ local function setupRemoteEventHandlers()
 		print("Received hide challenge prompt event")
 		ChallengePromptUI.hideChallengePrompt()
 	end)
+
+		-- Handle Edit Arena show/hide
+		local showEditArenaEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.SHOW_EDIT_ARENA_FRAME)
+		showEditArenaEvent.OnClientEvent:Connect(function()
+			print("ShowEditArenaFrame event received")
+			UI.showEditArenaFrame()
+		end)
+		local hideEditArenaEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.HIDE_EDIT_ARENA_FRAME)
+		hideEditArenaEvent.OnClientEvent:Connect(function()
+			print("HideEditArenaFrame event received")
+			UI.hideEditArenaFrame()
+		end)
 	
 
 end
@@ -103,6 +115,8 @@ local function setupKeybindHandlers()
 			print("Escape key pressed - clearing selection...")
 			-- Clear unit selection
 			UI.clearSelection()
+			-- Hide Edit Arena frame if visible
+			UI.hideEditArenaFrame()
 		end
 	end)
 	
