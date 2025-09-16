@@ -280,24 +280,6 @@ function UI.updatePlayerStats(playerData: DataStructures.PlayerData)
 	print("=== UI.updatePlayerStats SUCCESS ===")
 end
 
--- Function to create unit button
--- function UI.createUnitButton(unit: DataStructures.Unit, parent: GuiObject, onClick: () -> ())
-	-- local button = Instance.new("TextButton")
-	-- button.Size = UDim2.new(0.18, 0, 0.8, 0)
-	-- button.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-	-- button.BorderSizePixel = 0
-	-- button.Text = unit.name .. "\nCost: " .. unit.cost .. "\nTier: " .. unit.tier
-	-- button.TextColor3 = Color3.fromRGB(255, 255, 255)
-	-- button.TextScaled = true
-	-- button.Font = Enum.Font.Gotham
-	-- button.Parent = parent
-	
-	-- -- Add click handler
-	-- button.MouseButton1Click:Connect(onClick)
-	
-	-- return button
--- end
-
 -- Function to create shop unit button
 function UI.createShopUnitButton(unit: DataStructures.Unit, parent: GuiObject, onClick: () -> ())
 	print("Creating shop button for unit:", unit.name, "Cost:", unit.cost)
