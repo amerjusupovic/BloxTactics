@@ -14,23 +14,8 @@ local BASE_UNITS = {
 	{
 		id = "knight",
 		name = "Knight",
-		cost = 3,
-		imageAssetId = "rbxassetid://120796668963757", -- Stock knight image
-		baseStats = {
-			health = 100,
-			attack = 25,
-			armor = 15,
-			magicResist = 10,
-			attackSpeed = 1.0,
-			range = 1
-		},
-		abilities = {}
-	},
-	{
-		id = "warrior",
-		name = "Warrior",
 		cost = 1,
-		imageAssetId = "rbxassetid://99667859237167", -- Warrior image
+		imageAssetId = "rbxassetid://118286331875088", -- Knight image
 		baseStats = {
 			health = 60,
 			attack = 15,
@@ -45,7 +30,7 @@ local BASE_UNITS = {
 		id = "archer",
 		name = "Archer",
 		cost = 2,
-		imageAssetId = "rbxassetid://122049079845272", -- Archer image
+		imageAssetId = "rbxassetid://70680696375684", -- Archer image
 		baseStats = {
 			health = 50,
 			attack = 20,
@@ -57,24 +42,24 @@ local BASE_UNITS = {
 		abilities = {}
 	},
 	{
-		id = "mage",
-		name = "Mage",
-		cost = 4,
-		imageAssetId = "rbxassetid://135628423497794", -- Placeholder hex image
+		id = "wizard",
+		name = "Wizard",
+		cost = 3,
+		imageAssetId = "rbxassetid://115818046018653", -- Wizard image
 		baseStats = {
 			health = 40,
 			attack = 35,
 			armor = 2,
 			magicResist = 20,
 			attackSpeed = 0.8,
-			range = 2
+			range = 3
 		},
 		abilities = {}
 	},
 	{
 		id = "tank",
 		name = "Tank",
-		cost = 5,
+		cost = 4,
 		imageAssetId = "rbxassetid://135628423497794", -- Placeholder hex image
 		baseStats = {
 			health = 150,

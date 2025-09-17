@@ -161,7 +161,7 @@ function UnitMovement.createUnitVisual(hex: GuiObject, unit: any, x: number?, y:
 	-- Create unit visual
 	local unitVisual = Instance.new("ImageButton")
 	unitVisual.Size = UDim2.new(0.8, 0, 0.8, 0)
-	unitVisual.Position = UDim2.new(0.1, 0, 0, 0)
+	unitVisual.Position = UDim2.new(0.1, 0, 0.1, 0)
 	unitVisual.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
 	unitVisual.BorderSizePixel = 0
 	unitVisual.Image = unit.imageAssetId

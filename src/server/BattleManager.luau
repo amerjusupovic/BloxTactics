@@ -730,13 +730,24 @@ local function runBattleLoop(battleData: BattleData)
 		local team2Defeated = isTeamDefeated(battleData.team2)
 		
 		if team1Defeated or team2Defeated then
-			local winner = nil
+			print(string.format("[DEBUG] Battle end condition reached (team1Defeated=%s, team2Defeated=%s) p1=%s p2=%s", tostring(team1Defeated), tostring(team2Defeated), tostring(battleData.player1Id), tostring(battleData.player2Id)))
+			local winner: number? = nil
 			if team1Defeated and not team2Defeated then
 				winner = battleData.player2Id
+				print("[DEBUG] Team 1 defeated; declaring Player2 winner: " .. tostring(winner))
 			elseif team2Defeated and not team1Defeated then
 				winner = battleData.player1Id
+				print("[DEBUG] Team 2 defeated; declaring Player1 winner: " .. tostring(winner))
+			else
+				print("[DEBUG] Both teams defeated simultaneously -> draw")
 			end
-			
+
+			-- Sanity check: ensure winner is one of the two players else treat as draw
+			if winner and winner ~= battleData.player1Id and winner ~= battleData.player2Id then
+				warn("[BattleManager] Computed winner (" .. tostring(winner) .. ") not in battle participants; forcing draw")
+				winner = nil
+			end
+
 			BattleManager.endBattle(battleData.id, winner)
 			connection:Disconnect()
 		end

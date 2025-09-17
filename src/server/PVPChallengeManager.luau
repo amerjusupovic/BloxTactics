@@ -323,7 +323,12 @@ function PVPChallengeManager.startBattle(challengeId: string): boolean
 	PVPChallengeManager.populateBattleBoards(challengerPlayer, challengedPlayer)
 	
 	-- Start the actual battle using BattleManager
-	local battleId = BattleManager.startBattle(challengeId, challenge.challengerId, challenge.challengedId, challengedArena, function(winnerId)
+	-- IMPORTANT: BattleManager collects team1 units from the challenged player's arena (their own board)
+	-- and team2 units from the enemy board (which we populate with the challenger's units).
+	-- Therefore, to align winner logic (team1Defeated => challenger wins; team2Defeated => challenged wins)
+	-- we must pass challengedId as player1Id and challengerId as player2Id.
+	-- Previously these were reversed which caused winner attribution to flip and produced invalid winner IDs for rewards.
+	local battleId = BattleManager.startBattle(challengeId, challenge.challengedId, challenge.challengerId, challengedArena, function(winnerId)
 		-- Battle end callback - spawn to avoid blocking
 		spawn(function()
 			wait(1) -- Small delay to ensure battle state is properly updated
@@ -592,6 +597,19 @@ function PVPChallengeManager.endBattle(challengeId: string, winnerId: number?): 
 				local battleEndEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
 				battleEndEvent:FireClient(loserPlayer, string.format("Defeat. +%d XP, +%d Gold", rewards.loser.experience, rewards.loser.gold), 6)
 			end
+
+			-- Immediately push updated player data for both players so UI reflects new gold/XP/streak
+			local updatePlayerDataEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.UPDATE_PLAYER_DATA)
+			if updatePlayerDataEvent then
+				local winnerData = PlayerDataManager.getPlayerData(resultInfo.winnerId)
+				local loserData = PlayerDataManager.getPlayerData(resultInfo.loserId)
+				local winnerPlayer2 = Players:GetPlayerByUserId(resultInfo.winnerId)
+				local loserPlayer2 = Players:GetPlayerByUserId(resultInfo.loserId)
+				if winnerPlayer2 and winnerData then updatePlayerDataEvent:FireClient(winnerPlayer2, winnerData) end
+				if loserPlayer2 and loserData then updatePlayerDataEvent:FireClient(loserPlayer2, loserData) end
+			else
+				warn("[PVPChallengeManager] UpdatePlayerData event not found when attempting to push battle reward updates")
+			end
 		else
 			-- Fallback notifications if resultInfo missing
 			if challengerPlayer then
@@ -620,6 +638,19 @@ function PVPChallengeManager.endBattle(challengeId: string, winnerId: number?): 
 		if challengedPlayer then
 			local battleEndEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
 			battleEndEvent:FireClient(challengedPlayer, "Draw! No rewards granted.", 5)
+		end
+
+		-- Even in a draw, push current player data (streaks might be reset in future logic)
+		local updatePlayerDataEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.UPDATE_PLAYER_DATA)
+		if updatePlayerDataEvent then
+			if challengerPlayer then
+				local cData = PlayerDataManager.getPlayerData(challenge.challengerId)
+				if cData then updatePlayerDataEvent:FireClient(challengerPlayer, cData) end
+			end
+			if challengedPlayer then
+				local dData = PlayerDataManager.getPlayerData(challenge.challengedId)
+				if dData then updatePlayerDataEvent:FireClient(challengedPlayer, dData) end
+			end
 		end
 	end
 	

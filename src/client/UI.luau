@@ -285,7 +285,7 @@ function UI.createShopUnitButton(unit: DataStructures.Unit, parent: GuiObject, o
 	print("Creating shop button for unit:", unit.name, "Cost:", unit.cost)
 	
 	local button = Instance.new("ImageButton")
-	button.Size = UDim2.new(0.18, 0, 0.6, 0)
+	button.Size = UDim2.new(0.18, 0, 0.5, 0)
 	button.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
 	button.BorderSizePixel = 0
 	button.Image = unit.imageAssetId -- Use unit's image asset ID
@@ -370,7 +370,7 @@ function UI.updateShopDisplay(shopUnits: {DataStructures.Unit})
 		end)
 		
 		button.Name = "ShopUnit_" .. i
-		button.Position = UDim2.new(0.03 + (i-1) * 0.19, 0, 0.15, 0)
+		button.Position = UDim2.new(0.03 + (i-1) * 0.19, 0, 0.2, 0)
 	end
 end
 
