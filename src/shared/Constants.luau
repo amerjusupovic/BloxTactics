@@ -11,7 +11,7 @@ Constants.STARTING_LEVEL = 1
 Constants.MAX_LEVEL = 10
 Constants.BASE_EXPERIENCE_PER_LEVEL = 100 -- Base experience for exponential calculation
 Constants.EXPERIENCE_PER_LEVEL = 100 -- Legacy support, will be calculated dynamically
-Constants.LEVEL_UP_COST = 10
+Constants.LEVEL_UP_COST = 5
 Constants.LEVEL_UP_EXPERIENCE = 20
 
 -- Board constants

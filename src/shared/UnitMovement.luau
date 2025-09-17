@@ -10,6 +10,12 @@ local UnitMovement = {}
 -- Unit selection state
 local selectedUnit = nil
 local selectedHex = nil
+local selectionChangedEvent = Instance.new("BindableEvent")
+
+-- Public signal accessor
+function UnitMovement.selectionChanged()
+	return selectionChangedEvent.Event
+end
 
 -- Function to select a unit
 function UnitMovement.selectUnit(unitVisual: GuiObject, hex: GuiObject, context: string?)
@@ -29,6 +35,8 @@ function UnitMovement.selectUnit(unitVisual: GuiObject, hex: GuiObject, context:
 		unitVisual.BorderColor3 = Color3.fromRGB(255, 255, 0)
 		print("Unit highlighted in yellow in", context or "unknown context")
 	end
+
+	selectionChangedEvent:Fire(true, unitVisual)
 end
 
 -- Function to clear unit selection
@@ -39,6 +47,7 @@ function UnitMovement.clearSelection()
 		selectedUnit = nil
 	end
 	selectedHex = nil
+    selectionChangedEvent:Fire(false, nil)
 end
 
 -- Function to handle hex click for unit selection/movement

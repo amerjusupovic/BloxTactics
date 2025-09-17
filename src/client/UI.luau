@@ -31,6 +31,12 @@ local boardVisible = false
 
 -- Unit selection state is now handled by UnitMovement module
 
+-- Helper function to keep SellUnitFrame visibility consistent
+local function updateSellUnitFrameVisibility()
+	if sellUnitFrame then
+		sellUnitFrame.Visible = boardVisible and UnitMovement.hasSelection()
+	end
+end
 
 -- Function to create the main UI
 function UI.createMainUI()
@@ -87,21 +93,35 @@ function UI.createMainUI()
 	end
 	print("All UI frames found successfully!")
 	
-	-- Create board hexes using shared module
+	-- Create board & bench hexes using shared module (no wrapper needed now that we have selectionChanged signal)
 	UnitMovement.createBoardHexes(boardFrame, function(hex, position)
 		UnitMovement.handleHexClick(hex, position, UI.requestUnitMove, "regular board")
 	end, "regular board")
-	
-	-- Create bench hexes using shared module
 	UnitMovement.createBenchHexes(benchFrame, function(hex, position)
 		UnitMovement.handleHexClick(hex, position, UI.requestUnitMove, "regular bench")
 	end, "regular bench")
-	
-	-- Add click handler for sell area
-	if sellUnitFrame then
-		sellUnitFrame.MouseButton1Click:Connect(function()
-			UI.sellSelectedUnit()
+
+	-- Listen for selection changes to keep SellUnitFrame in sync
+	local ok, event = pcall(function()
+		return UnitMovement.selectionChanged()
+	end)
+	if ok and event then
+		event:Connect(function(hasSelection)
+			updateSellUnitFrameVisibility()
 		end)
+	else
+		warn("UnitMovement.selectionChanged() not available; SellUnitFrame visibility may desync")
+	end
+	
+	-- Add click handler for sell area (only if it's a button type)
+	if sellUnitFrame then
+		if sellUnitFrame:IsA("GuiButton") then
+			sellUnitFrame.MouseButton1Click:Connect(function()
+				UI.sellSelectedUnit()
+			end)
+		else
+			warn("SellUnitFrame is not a clickable GuiButton. Add a TextButton/ImageButton for selling or change the instance type.")
+		end
 	end
 	
 	-- Add click handler for refresh button
@@ -120,6 +140,8 @@ function UI.createMainUI()
 		end)
 	end
 	
+	-- Ensure correct initial visibility (hidden until a selection while board is open)
+	updateSellUnitFrameVisibility()
 	print("UI created successfully from existing ReplicatedStorage elements!")
 end
 
@@ -276,6 +298,24 @@ function UI.updatePlayerStats(playerData: DataStructures.PlayerData)
 		streakLabel.Text = "Streak: " .. playerData.streak
 		print("Updated streak label to:", streakLabel.Text)
 	end
+
+	-- Update refresh & level up button text
+	if shopFrame then
+		local refreshButton = shopFrame:FindFirstChild("RefreshButton")
+		if refreshButton and refreshButton:IsA("TextButton") then
+			-- Mirror server formula: base refresh cost + (level - 1)
+			local baseCost = _Constants.SHOP_REFRESH_COST
+			local refreshCost = baseCost + math.max(0, (playerData.level - 1))
+			refreshButton.Text = string.format("Refresh: %dg", refreshCost)
+		end
+
+		local levelUpButton = shopFrame:FindFirstChild("LevelUpButton")
+		if levelUpButton and levelUpButton:IsA("TextButton") then
+			-- Requested static text; assumes +10xp grants a level up or partial progress.
+			-- If this should reflect dynamic XP or gold values later, adjust accordingly.
+			levelUpButton.Text = "Level Up (+10xp): 5g"
+		end
+	end
 	
 	print("=== UI.updatePlayerStats SUCCESS ===")
 end
@@ -290,11 +330,19 @@ function UI.createShopUnitButton(unit: DataStructures.Unit, parent: GuiObject, o
 	button.BorderSizePixel = 0
 	button.Image = unit.imageAssetId -- Use unit's image asset ID
 	button.Parent = parent
+
+	-- Add border stroke for visual clarity
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(180, 180, 180)
+	stroke.Thickness = 2
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Parent = button
 	
 	-- Create star indicators if applicable
 	if unit.starIndicator and unit.starIndicator ~= "none" then
 		local starCount = (unit.starIndicator == "silver") and 2 or 3
 		local starColor = (unit.starIndicator == "silver") and Color3.fromRGB(192, 192, 192) or Color3.fromRGB(255, 215, 0)
+		local starBorderColor = (unit.starIndicator == "silver") and Color3.fromRGB(152, 152, 152) or Color3.fromRGB(215, 175, 0)
 		
 		for i = 1, starCount do
 			local star = Instance.new("TextLabel")
@@ -305,6 +353,8 @@ function UI.createShopUnitButton(unit: DataStructures.Unit, parent: GuiObject, o
 			star.TextColor3 = starColor
 			star.TextScaled = true
 			star.Font = Enum.Font.GothamBold
+			star.TextStrokeColor3 = starBorderColor
+            star.TextStrokeTransparency = 0
 			star.Parent = button
 		end
 	end
@@ -312,7 +362,7 @@ function UI.createShopUnitButton(unit: DataStructures.Unit, parent: GuiObject, o
 	-- Create unit info label
 	local infoLabel = Instance.new("TextLabel")
 	infoLabel.Size = UDim2.new(1, 0, 0.3, 0)
-	infoLabel.Position = UDim2.new(0, 0, 0.75, 0)
+	infoLabel.Position = UDim2.new(0, 0, 0.7, 0)
 	infoLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 	infoLabel.BackgroundTransparency = 0.5
 	infoLabel.Text = unit.name .. "\nCost: " .. unit.cost .. "\nTier: " .. unit.tier
@@ -576,6 +626,8 @@ function UI.updateBoardDisplay(boardState: DataStructures.BoardState)
 			print("Skipping invalid position or unit:", position, unit)
 		end
 	end
+	
+	updateSellUnitFrameVisibility()
 end
 
 -- Function to update bench display
@@ -655,21 +707,10 @@ function UI.toggleBoard()
 	boardVisible = not boardVisible
 	boardFrame.Visible = boardVisible
 	benchFrame.Visible = boardVisible
-	print("Board visibility set to:", boardVisible)
-	
-	-- Show/hide sell area based on board visibility and selection
-	if sellUnitFrame then
-		sellUnitFrame.Visible = boardVisible and UnitMovement.hasSelection()
-	end
-	
-	-- Clear selection when hiding board
+	updateSellUnitFrameVisibility()
 	if not boardVisible then
 		UnitMovement.clearSelection()
 	end
-	
-	-- Show notification
-	-- local message = boardVisible and "Board manager opened" or "Board manager closed"
-	-- UI.showNotification(message, 1)
 end
 
 -- Function to show/hide UI
@@ -682,22 +723,13 @@ end
 -- Function to handle unit selection with sell area visibility
 function UI.handleUnitSelection(unitVisual: GuiObject, hex: GuiObject)
 	UnitMovement.selectUnit(unitVisual, hex, "regular board")
-	
-	-- Show sell area when board is visible
-	if boardVisible and sellUnitFrame then
-		sellUnitFrame.Visible = true
-		print("Sell area made visible")
-	end
+	updateSellUnitFrameVisibility()
 end
 
 -- Function to clear unit selection with sell area visibility
 function UI.clearSelection()
 	UnitMovement.clearSelection()
-	
-	-- Hide sell area
-	if sellUnitFrame then
-		sellUnitFrame.Visible = false
-	end
+	updateSellUnitFrameVisibility()
 end
 
 -- Function to request unit move from server

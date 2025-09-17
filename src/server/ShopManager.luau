@@ -132,6 +132,8 @@ function ShopManager.handleUnitPurchase(userId: number, shopIndex: number)
 			ShopManager.sendShopToClient(userId)
 			ShopManager.sendBoardUpdate(userId)
 			ShopManager.sendBenchUpdate(userId)
+			-- Immediately push updated player stats so gold/etc reflect new state after combination
+			ShopManager.sendPlayerDataUpdate(userId)
 			ShopManager.sendNotification(userId, "Unit combined to tier " .. tierUpResult .. "!", 3)
 			
 			return true
@@ -373,7 +375,7 @@ function ShopManager.refreshShop(userId: number)
 	if not playerData then return false end
 	
 	-- Check if player has enough gold for refresh
-	local refreshCost = Shop.getRefreshCost()
+	local refreshCost = Shop.getRefreshCost(playerData.level)
 	if playerData.gold < refreshCost then
 		ShopManager.sendNotification(userId, "Insufficient gold for refresh! Need " .. refreshCost .. " gold.", 3)
 		return false
@@ -818,7 +820,9 @@ function ShopManager.handleBoardUnitSell(userId: number, unitId: string, positio
 		-- Save player data
 		PlayerDataManager.savePlayerData(userId)
 		
-		-- Update client
+		-- Update client (refresh shop for star indicators & gold, player stats, then board)
+		ShopManager.sendShopToClient(userId)
+		ShopManager.sendPlayerDataUpdate(userId)
 		ShopManager.sendBoardUpdate(userId)
 		ShopManager.sendNotification(userId, "Unit sold for " .. sellValue .. " gold!", 2)
 		
@@ -865,7 +869,9 @@ function ShopManager.handleBenchUnitSell(userId: number, unitId: string, positio
 		-- Save player data
 		PlayerDataManager.savePlayerData(userId)
 		
-		-- Update client
+		-- Update client (refresh shop for star indicators & gold, player stats, then bench)
+		ShopManager.sendShopToClient(userId)
+		ShopManager.sendPlayerDataUpdate(userId)
 		ShopManager.sendBenchUpdate(userId)
 		ShopManager.sendNotification(userId, "Unit sold for " .. sellValue .. " gold!", 2)
 		
