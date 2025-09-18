@@ -277,16 +277,25 @@ function PlayerDataManager.savePlayerData(userId: number): boolean
 	-- Serialize player data before saving
 	local serializedData = PlayerDataManager.serializePlayerData(playerData)
 	
-	local success, error = pcall(function()
-		playerDataStore:SetAsync(tostring(userId), serializedData)
-	end)
-	
-	if not success then
-		warn("Failed to save player data for user " .. userId .. ": " .. tostring(error))
-		return false
+	-- Try a couple retries to mitigate transient DataStore hiccups
+	local attempts = 0
+	local lastErr
+	while attempts < 3 do
+		attempts += 1
+		local ok, err = pcall(function()
+			playerDataStore:SetAsync(tostring(userId), serializedData)
+		end)
+		if ok then
+			return true
+		else
+			lastErr = err
+			warn(string.format("[PlayerData] Save attempt %d failed for user %d: %s", attempts, userId, tostring(err)))
+			wait(0.5 * attempts) -- brief backoff
+		end
 	end
-	
-	return true
+
+	warn("Failed to save player data for user " .. userId .. ": " .. tostring(lastErr))
+	return false
 end
 
 -- Function to get player data
@@ -466,13 +475,27 @@ end
 -- Player leaving handler
 local function onPlayerRemoving(player: Player)
 	local userId = player.UserId
-	
-	PlayerDataManager.removePlayerData(userId)
+	-- Save immediately when player leaves; keep cache for BindToClose backup
+	local saved = PlayerDataManager.savePlayerData(userId)
+	if not saved then
+		warn("[PlayerData] Save on PlayerRemoving failed for user " .. userId)
+	end
+	-- Optionally remove from cache later; keeping it allows BindToClose flush
 end
 
 -- Connect events
 Players.PlayerAdded:Connect(onPlayerAdded)
 Players.PlayerRemoving:Connect(onPlayerRemoving)
+
+-- Ensure data is flushed on server shutdown
+game:BindToClose(function()
+	-- Give a small window to save all cached player data
+	for userId, _ in pairs(playerDataCache) do
+		PlayerDataManager.savePlayerData(userId)
+	end
+	-- Yield briefly to allow requests to complete
+	wait(2)
+end)
 
 -- Start auto-save
 PlayerDataManager.startAutoSave()

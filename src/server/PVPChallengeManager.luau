@@ -584,6 +584,13 @@ function PVPChallengeManager.endBattle(challengeId: string, winnerId: number?): 
 		if resultInfo then
 			local rewards = CombatRewards.applyBattleRewards(resultInfo.winnerId, resultInfo.loserId, resultInfo.winnerLevel, resultInfo.loserLevel, resultInfo.winnerStreak, PlayerDataManager)
 
+			-- Persist rewards immediately to reduce risk of data loss if players leave right away
+			local winnerSaved = PlayerDataManager.savePlayerData(resultInfo.winnerId)
+			local loserSaved = PlayerDataManager.savePlayerData(resultInfo.loserId)
+			if not winnerSaved or not loserSaved then
+				warn(string.format("[PVPChallengeManager] Immediate save after rewards failed (winnerSaved=%s, loserSaved=%s)", tostring(winnerSaved), tostring(loserSaved)))
+			end
+
 			-- Notify winner
 			local winnerPlayer = Players:GetPlayerByUserId(resultInfo.winnerId)
 			if winnerPlayer then

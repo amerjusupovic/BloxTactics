@@ -8,11 +8,15 @@ local AnimationConstants = {
     },
     Archer = {
         Attack = "rbxassetid://123508326000264", -- Using same asset ID as Warrior for demonstration
-        Move = "rbxassetid://81143734854964"    -- Example asset ID for Archer move
+        Move = "rbxassetid://81143734854964"
     },
     Wizard = {
         Attack = "rbxassetid://123508326000264", -- Using same asset ID as Warrior for demonstration
-        Move = "rbxassetid://81143734854964"    -- Example asset ID for Archer move
+        Move = "rbxassetid://81143734854964"
+    },
+    Tank = {
+        Attack = "rbxassetid://123508326000264", -- Using same asset ID as Warrior for demonstration
+        Move = "rbxassetid://81143734854964"
     },
     -- Add more units as needed
 }

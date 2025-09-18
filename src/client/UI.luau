@@ -24,6 +24,8 @@ local benchFrame = nil
 local statsFrame = nil
 local sellUnitFrame = nil
 local editArenaFrame = nil
+local arenaSelectionFrames = {}
+local currentArenaCheckmark = nil
 
 -- UI state variables
 local shopVisible = false
@@ -90,6 +92,20 @@ function UI.createMainUI()
 	-- EditArenaFrame is optional for now; if missing we log but continue
 	if not editArenaFrame then
 		warn("EditArenaFrame not found (will only matter when triggering edit arena)")
+	else
+		-- Gather arena option frames (children that end with ArenaFrame)
+		for _, child in ipairs(editArenaFrame:GetChildren()) do
+			if child.Name:match("ArenaFrame$") or child.Name:match("ArenaFrame") then
+				arenaSelectionFrames[child.Name] = child
+				local button = child:FindFirstChild("SwitchArenaButton")
+				if button and button:IsA("TextButton") or button:IsA("ImageButton") then
+					button.MouseButton1Click:Connect(function()
+						local arenaName = child:GetAttribute("ArenaName") or child.Name:gsub("Frame$","")
+						UI.requestArenaSwitch(arenaName)
+					end)
+				end
+		end
+	end
 	end
 	print("All UI frames found successfully!")
 	
@@ -143,6 +159,44 @@ function UI.createMainUI()
 	-- Ensure correct initial visibility (hidden until a selection while board is open)
 	updateSellUnitFrameVisibility()
 	print("UI created successfully from existing ReplicatedStorage elements!")
+end
+
+-- Request arena switch
+function UI.requestArenaSwitch(arenaName: string)
+	local switchEvent = game.ReplicatedStorage.RemoteEvents:FindFirstChild(_Constants.REMOTE_EVENT_NAMES.SWITCH_ARENA)
+	if switchEvent then
+		switchEvent:FireServer(arenaName)
+	else
+		warn("SwitchArena RemoteEvent not found")
+	end
+end
+
+-- Update arena selection checkmarks
+function UI.updateArenaSelection(selectedArenaName: string)
+	if not editArenaFrame then return end
+	-- Remove previous checkmark
+	if currentArenaCheckmark then
+		currentArenaCheckmark:Destroy()
+		currentArenaCheckmark = nil
+	end
+	-- Find frame whose ArenaName attribute or derived name matches selectedArenaName
+	for _, frame in pairs(arenaSelectionFrames) do
+		local arenaName = frame:GetAttribute("ArenaName") or frame.Name:gsub("Frame$","")
+		if arenaName == selectedArenaName then
+			local mark = Instance.new("TextLabel")
+			mark.Name = "SelectedArenaMark"
+			mark.Size = UDim2.new(0, 24, 0, 24)
+			mark.Position = UDim2.new(1, -28, 0, 4)
+			mark.BackgroundTransparency = 1
+			mark.Text = "✓"
+			mark.TextScaled = true
+			mark.TextColor3 = Color3.fromRGB(0,255,0)
+			mark.Font = Enum.Font.GothamBold
+			mark.Parent = frame
+			currentArenaCheckmark = mark
+			break
+		end
+	end
 end
 
 -- Show Edit Arena Frame
@@ -318,6 +372,11 @@ function UI.updatePlayerStats(playerData: DataStructures.PlayerData)
 	end
 	
 	print("=== UI.updatePlayerStats SUCCESS ===")
+
+	-- Update arena selection UI (if any) using selectedArenaName
+	if playerData.selectedArenaName then
+		UI.updateArenaSelection(playerData.selectedArenaName)
+	end
 end
 
 -- Function to create shop unit button

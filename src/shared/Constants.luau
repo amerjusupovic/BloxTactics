@@ -10,9 +10,8 @@ Constants.STARTING_GOLD = 10
 Constants.STARTING_LEVEL = 1
 Constants.MAX_LEVEL = 10
 Constants.BASE_EXPERIENCE_PER_LEVEL = 100 -- Base experience for exponential calculation
-Constants.EXPERIENCE_PER_LEVEL = 100 -- Legacy support, will be calculated dynamically
 Constants.LEVEL_UP_COST = 5
-Constants.LEVEL_UP_EXPERIENCE = 20
+Constants.LEVEL_UP_EXPERIENCE = 10
 
 -- Board constants
 Constants.BOARD_WIDTH = 7
@@ -34,7 +33,7 @@ Constants.STREAK_BONUS = 1 -- extra gold per streak
 
 -- Combat rewards constants
 Constants.BASE_EXPERIENCE_REWARD = 10 -- Base experience per enemy level
-Constants.BASE_GOLD_REWARD = 8 -- Base gold per enemy level
+Constants.BASE_GOLD_REWARD = 15 -- Base gold per enemy level
 Constants.LOSER_EXPERIENCE_MULTIPLIER = 0.1 -- Loser gets 10% of base experience
 Constants.LOSER_GOLD_MULTIPLIER = 0.1 -- Loser gets 10% of base gold
 
@@ -59,7 +58,7 @@ Constants.GROUND_LEVEL = 3.16
 Constants.ARENA_SPACING = 250
 Constants.LOBBY_SPACING = 2000
 Constants.MAX_PLAYERS_PER_LOBBY = 6
-Constants.PLAYER_SPAWN_FORWARD_OFFSET = -135 
+Constants.PLAYER_SPAWN_FORWARD_OFFSET = -70 
 
 -- Board Detection constants
 Constants.BOARD_DETECTION_ZONE_SIZE = Vector3.new(200, 10, 200) -- 100 unit radius detection zone
@@ -92,7 +91,8 @@ Constants.REMOTE_EVENT_NAMES = {
 	SHOW_NOTIFICATION = "ShowNotification",
 	RESET_PLAYER_DATA = "ResetPlayerData",
 	SHOW_EDIT_ARENA_FRAME = "ShowEditArenaFrame",
-	HIDE_EDIT_ARENA_FRAME = "HideEditArenaFrame"
+	HIDE_EDIT_ARENA_FRAME = "HideEditArenaFrame",
+	SWITCH_ARENA = "SwitchArena" -- Client requests switching arena theme
 }
 
 return Constants

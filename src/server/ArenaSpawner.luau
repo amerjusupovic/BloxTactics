@@ -9,6 +9,19 @@ local PlayerData = require(script.Parent.PlayerData)
 
 local ArenaSpawner = {}
 
+-- Helper: move a Model to a world position while preserving its existing orientation.
+-- If the model has a PrimaryPart, we use it; otherwise we compute pivot from GetPivot.
+local function moveModelPreserveOrientation(model: Instance, targetPosition: Vector3)
+	if not model or not model:IsA("Model") then return end
+	-- Ensure model has a pivot reference
+	local pivotCFrame = model:GetPivot()
+	-- Keep rotation (orientation) and only change position
+	local _, _, _, r00, r01, r02, r10, r11, r12, r20, r21, r22 = pivotCFrame:GetComponents()
+	-- Rebuild CFrame with same rotation matrix but new position
+	local newCFrame = CFrame.new(targetPosition.X, targetPosition.Y, targetPosition.Z, r00, r01, r02, r10, r11, r12, r20, r21, r22)
+	model:PivotTo(newCFrame)
+end
+
 -- Track baseplates for each lobby
 local lobbyBaseplates = {} -- {lobbyId = baseplate}
 
@@ -79,9 +92,22 @@ function ArenaSpawner:createPlayerArena(playerId: number, playerName: string, pl
 		print("Created player folder for " .. playerName .. " (ID: " .. playerId .. ")")
 	end
 	
-	-- Determine which arena to spawn
+	-- Determine which arena to spawn (ensure data loaded)
 	local playerData = PlayerData.getPlayerData(playerId)
+	if not playerData then
+		-- Attempt to load (may happen if arena spawn precedes PlayerAdded data load for some reason)
+		local ok, loaded = pcall(function()
+			return PlayerData.loadPlayerData(playerId, playerName)
+		end)
+		if ok and loaded then
+			playerData = loaded
+			print("[ArenaSpawner] Loaded player data on-demand for " .. playerName)
+		else
+			warn("[ArenaSpawner] Failed to load player data on-demand for " .. playerName .. ": " .. tostring(loaded))
+		end
+	end
 	local arenaName = (playerData and playerData.selectedArenaName) or Constants.DEFAULT_ARENA_NAME
+	print("[ArenaSpawner] Spawning arena '" .. arenaName .. "' for player " .. playerName .. " (playerData present: " .. tostring(playerData ~= nil) .. ")")
 
 	-- Fetch arena model folder
 	local arenasFolder = ReplicatedStorage:FindFirstChild("Arenas")
@@ -139,8 +165,8 @@ function ArenaSpawner:createPlayerArena(playerId: number, playerName: string, pl
 	
 	-- Set the arena position
 	if clonedArena:IsA("Model") then
-		-- For Models, use PivotTo to set the position
-		clonedArena:PivotTo(CFrame.new(arenaPosition))
+		-- For Models, move while preserving original orientation from the template
+		moveModelPreserveOrientation(clonedArena, arenaPosition)
 		
 		-- Also ensure the PrimaryPart is set if it exists
 		if not clonedArena.PrimaryPart then
@@ -348,6 +374,187 @@ function ArenaSpawner:getArena(playerId: number): Folder?
 		end
 	end
 	return nil
+end
+
+-- Internal helper: copy units from old arena to new arena (board + bench spots)
+local function transferUnits(oldArena: Instance?, newArena: Instance?)
+	if not oldArena or not newArena then return end
+
+	-- Build lookup for destination parts (Hex_*_* and Bench_*)
+	local destHexes = {}
+	local destBenches = {}
+	for _, child in ipairs(newArena:GetChildren()) do
+		if child:IsA("BasePart") then
+			local name = child.Name
+			if name:match("^Hex_%d+_%d+$") then
+				destHexes[name] = child
+			elseif name:match("^Bench_%d+$") then
+				destBenches[name] = child
+			end
+		end
+	end
+
+	-- Move unit models
+	for _, child in ipairs(oldArena:GetChildren()) do
+		if child:IsA("BasePart") then
+			-- skip plain parts
+		elseif child:IsA("Folder") or child:IsA("Model") then
+			-- Skip enemy board container etc., only move actual unit models parented to hex or bench parts
+		end
+	end
+
+	-- Units are parented under the hex/bench parts. We iterate those parts in old arena.
+	for _, part in ipairs(oldArena:GetChildren()) do
+		if part:IsA("BasePart") then
+			local pname = part.Name
+			if pname:match("^Hex_%d+_%d+$") or pname:match("^Bench_%d+$") then
+				local destPart = destHexes[pname] or destBenches[pname]
+				if destPart then
+					for _, unitModel in ipairs(part:GetChildren()) do
+						if unitModel:IsA("Model") then
+							unitModel.Parent = destPart
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+-- Switch the player's arena to a new template name, preserving units (if possible)
+function ArenaSpawner:switchArenaForPlayer(playerId: number, newArenaName: string): boolean
+	local spawnPoints = self.spawnPoints
+	if not spawnPoints then return false end
+	local playerFolder = spawnPoints:FindFirstChild(tostring(playerId))
+	if not playerFolder then return false end
+
+	-- Find current arena (first child with name ending in ' Arena')
+	local currentArena
+	for _, child in ipairs(playerFolder:GetChildren()) do
+		if child.Name:match("%sArena$") then
+			currentArena = child
+			break
+		end
+	end
+
+	-- If already that arena, nothing to do
+	if currentArena and currentArena.Name == newArenaName then
+		return true
+	end
+
+	-- Get template
+	local arenasFolder = ReplicatedStorage:FindFirstChild("Arenas")
+	if not arenasFolder then
+		warn("Arenas folder missing when switching arena")
+		return false
+	end
+	local template = arenasFolder:FindFirstChild(newArenaName)
+	if not template then
+		warn("Arena template '" .. newArenaName .. "' not found")
+		return false
+	end
+
+	-- Clone new arena
+	local newArena = template:Clone()
+	newArena.Name = newArenaName
+
+	-- Preserve only the POSITION from current arena; keep the new template's original orientation
+	local targetPosition: Vector3? = nil
+	if currentArena and currentArena:IsA("Model") then
+		targetPosition = currentArena:GetPivot().Position
+	elseif currentArena and currentArena:IsA("Folder") then
+		-- fallback: average parts
+		local sum = Vector3.new(0,0,0); local count = 0
+		for _, d in ipairs(currentArena:GetDescendants()) do
+			if d:IsA("BasePart") then sum += d.Position; count += 1 end
+		end
+		if count > 0 then targetPosition = sum / count end
+	end
+
+	if not targetPosition and currentArena then
+		for _, d in ipairs(currentArena:GetChildren()) do
+			if d:IsA("BasePart") then targetPosition = d.Position; break end
+		end
+	end
+
+	-- Place new arena before deleting old, then move while preserving its own template orientation
+	newArena.Parent = playerFolder
+	if newArena:IsA("Model") and targetPosition then
+		moveModelPreserveOrientation(newArena, targetPosition)
+	end
+
+	-- Transfer units
+	if currentArena then
+		transferUnits(currentArena, newArena)
+		currentArena:Destroy()
+	end
+
+	-- Re-establish Edit Arena interactions on new arena (reuse logic by calling portion of createPlayerArena logic)
+	local editContainer = newArena:FindFirstChild("Edit Arena")
+	if editContainer then
+		local RemoteEvents = require(script.Parent.RemoteEvents)
+		local showEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_EDIT_ARENA_FRAME)
+		local hideEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.HIDE_EDIT_ARENA_FRAME)
+		local active = false
+		local monitoring = false
+		local DEBOUNCE_TIME = 1
+		local lastTouch = 0
+		local triggerParts = {}
+		if editContainer:IsA("BasePart") then
+			triggerParts = {editContainer}
+		else
+			for _, desc in ipairs(editContainer:GetDescendants()) do
+				if desc:IsA("BasePart") then table.insert(triggerParts, desc) end
+			end
+		end
+		local function getEditPosition(): Vector3
+			if editContainer:IsA("BasePart") then return editContainer.Position end
+			if editContainer:IsA("Model") and editContainer.PrimaryPart then return editContainer.PrimaryPart.Position end
+			if triggerParts[1] then return triggerParts[1].Position end
+			return newArena:IsA("Model") and newArena:GetPivot().Position or Vector3.new()
+		end
+		local function startMonitoring(player: Player, humanoidRootPart: BasePart)
+			if monitoring then return end
+			monitoring = true
+			spawn(function()
+				while active and humanoidRootPart.Parent and humanoidRootPart.Parent.Parent do
+					local distance = (humanoidRootPart.Position - getEditPosition()).Magnitude
+					if distance > 20 then
+						if hideEvent then hideEvent:FireClient(player) end
+						active = false
+						break
+					end
+					wait(0.5)
+				end
+				monitoring = false
+			end)
+		end
+		local function onTouched(hit: BasePart)
+			local now = os.clock()
+			if now - lastTouch < DEBOUNCE_TIME then return end
+			local character = hit.Parent
+			if not character then return end
+			local humanoid = character:FindFirstChildOfClass("Humanoid")
+			if not humanoid then return end
+			local player = game.Players:GetPlayerFromCharacter(character)
+			if not player or player.UserId ~= playerId then return end
+			local hrp = character:FindFirstChild("HumanoidRootPart")
+			if not hrp then return end
+			lastTouch = now
+			if not active then
+				active = true
+				if showEvent then showEvent:FireClient(player) end
+				startMonitoring(player, hrp)
+			else
+				startMonitoring(player, hrp)
+			end
+		end
+		for _, part in ipairs(triggerParts) do
+			part.Touched:Connect(onTouched)
+		end
+	end
+
+	return true
 end
 
 -- Function to get enemy board for a player

@@ -64,7 +64,8 @@ local BATTLE_CONSTANTS = {
 	ATTACK_SPEED_MULTIPLIER = 0.5, -- Slow down attack speed by 50%
 	MOVEMENT_COOLDOWN = 1, -- Seconds between hex movements (faster to allow melee to close)
 	HEX_OCCUPANCY_CHECK_DISTANCE = 3, -- Distance to check for hex occupancy
-	MOVEMENT_TWEEN_TIME = 2.0 -- Time for smooth movement between hexes
+	MOVEMENT_TWEEN_TIME = 2.0, -- Time for smooth movement between hexes
+	PROJECTILE_TRAVEL_TIME = 0.5 -- Time it takes projectile to reach target (seconds)
 }
 
 -- Toggle to enable very verbose per-frame attack/range logs
@@ -389,19 +390,93 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 end
 
 -- Attack target unit
+-- Spawns a projectile (if any) and returns whether damage application should be delayed until projectile impact
+local function spawnProjectileIfNeeded(unit: BattleUnit, target: BattleUnit): boolean
+	if not unit.unit or not unit.unit.projectileName then
+		return false
+	end
+
+	local projectileFolder = ReplicatedStorage:FindFirstChild("Projectiles")
+	if not projectileFolder then
+		warn("[BattleManager] Projectiles folder missing in ReplicatedStorage")
+		return false
+	end
+
+	local projectileTemplate = projectileFolder:FindFirstChild(unit.unit.projectileName)
+	if not projectileTemplate then
+		warn("[BattleManager] Projectile template not found: " .. tostring(unit.unit.projectileName))
+		return false
+	end
+
+	if not unit.model or not target.model then
+		return false
+	end
+
+	local cloned = projectileTemplate:Clone()
+	cloned.Name = unit.unit.projectileName .. "_Proj"
+	-- Determine start (attacker) and end (target) positions
+	local startPos = unit.model:GetPivot().Position + Vector3.new(0, BATTLE_CONSTANTS.UNIT_HEIGHT_OFFSET, 0)
+	local endPos = target.model:GetPivot().Position + Vector3.new(0, BATTLE_CONSTANTS.UNIT_HEIGHT_OFFSET, 0)
+
+	-- If projectile is a Model, set its pivot; if it's a BasePart just position it
+	if cloned:IsA("Model") then
+		local pivot = cloned:GetPivot()
+		local size = cloned:GetExtentsSize()
+		local heightOffset = size.Y/2
+		cloned:PivotTo(CFrame.new(startPos + Vector3.new(0, heightOffset, 0), endPos))
+	else
+		if cloned:IsA("BasePart") then
+			cloned.CFrame = CFrame.new(startPos, endPos)
+		end
+	end
+
+	cloned.Parent = workspace
+
+	-- Tween instantly (fast travel) from start to end using TweenService
+	local tweenInfo = TweenInfo.new(BATTLE_CONSTANTS.PROJECTILE_TRAVEL_TIME, Enum.EasingStyle.Linear)
+	local goalCFrame = CFrame.new(endPos, startPos) -- face backwards for simple effect
+
+	-- Support Part vs Model tweening
+	if cloned:IsA("BasePart") then
+		local tween = TweenService:Create(cloned, tweenInfo, {CFrame = goalCFrame})
+		tween.Completed:Connect(function()
+			cloned:Destroy()
+		end)
+		tween:Play()
+	else
+		-- For models, move via a CFrameValue and PivotTo updates
+		local cfVal = Instance.new("CFrameValue")
+		cfVal.Value = cloned:GetPivot()
+		local tween = TweenService:Create(cfVal, tweenInfo, {Value = goalCFrame})
+		local conn
+		conn = cfVal:GetPropertyChangedSignal("Value"):Connect(function()
+			if cloned.Parent then
+				cloned:PivotTo(cfVal.Value)
+			end
+		end)
+		tween.Completed:Connect(function()
+			if conn then conn:Disconnect() end
+			cloned:Destroy()
+			cfVal:Destroy()
+		end)
+		tween:Play()
+	end
+
+	-- Delay damage application until projectile completes
+	return true
+end
+
 local function attackTarget(unit: BattleUnit, target: BattleUnit)
 	if not unit.model or not target.model then
 		print("DEBUG: attackTarget failed - missing models")
 		return
 	end
-	
-	-- Calculate damage
+
+	-- Calculate damage data upfront
 	local damage = unit.unit.stats.attack
 	local armor = target.unit.stats.armor
 	local actualDamage = math.max(1, damage - armor)
-	
-	print("DEBUG: Unit " .. unit.unit.name .. " attacking " .. target.unit.name .. " for " .. actualDamage .. " damage")
-	print("DEBUG: Attacker stats - damage: " .. damage .. ", target armor: " .. armor)
+	print("DEBUG: Unit " .. unit.unit.name .. " initiating attack on " .. target.unit.name .. " (baseDamage=" .. damage .. ", armor=" .. armor .. ", postMitigation=" .. actualDamage .. ")")
 	
 	-- Face the target and play attack animation for attacker
 	local attackerHumanoid = unit.model:FindFirstChild("Humanoid")
@@ -423,31 +498,38 @@ local function attackTarget(unit: BattleUnit, target: BattleUnit)
 		track:Play()
 	end
     
-	-- Find the Humanoid in the target model
-	local humanoid = target.model:FindFirstChild("Humanoid")
-	if humanoid then
-		print("DEBUG: Found Humanoid in target, applying damage via Humanoid")
-		-- Use Roblox's built-in damage system
-		humanoid:TakeDamage(actualDamage)
-		
-		-- Update our internal health tracking
-		target.health = humanoid.Health
-		print("DEBUG: Target health after damage: " .. target.health)
-		
-		-- Check if target died
-		if humanoid.Health <= 0 then
-			target.isAlive = false
-			target.model:SetAttribute("IsAlive", false)
-			-- Make the model semi-transparent
-			for _, part in pairs(target.model:GetDescendants()) do
-				if part:IsA("BasePart") then
-					part.Transparency = 0.7
+	local delayDamage = spawnProjectileIfNeeded(unit, target)
+
+	local function applyDamage()
+		-- Find the Humanoid in the target model (it could have died already)
+		if not target.model then return end
+		local humanoid = target.model:FindFirstChild("Humanoid")
+		if humanoid and humanoid.Health > 0 then
+			print("DEBUG: Applying damage " .. actualDamage .. " to target " .. target.unit.name)
+			humanoid:TakeDamage(actualDamage)
+			target.health = humanoid.Health
+			print("DEBUG: Target health after damage: " .. target.health)
+			if humanoid.Health <= 0 then
+				target.isAlive = false
+				target.model:SetAttribute("IsAlive", false)
+				for _, part in pairs(target.model:GetDescendants()) do
+					if part:IsA("BasePart") then
+						part.Transparency = 0.7
+					end
 				end
+				print("Unit " .. target.unit.name .. " died!")
 			end
-			print("Unit " .. target.unit.name .. " died!")
+		else
+			if not humanoid then
+				warn("No Humanoid found in target unit: " .. target.unit.name)
+			end
 		end
+	end
+
+	if delayDamage then
+		task.delay(BATTLE_CONSTANTS.PROJECTILE_TRAVEL_TIME, applyDamage)
 	else
-		warn("No Humanoid found in target unit: " .. target.unit.name)
+		applyDamage()
 	end
 	
 	-- Visual damage feedback - make the model flash red briefly
@@ -468,7 +550,7 @@ local function attackTarget(unit: BattleUnit, target: BattleUnit)
 	-- Update last attack time
 	unit.lastAttackTime = tick()
 	
-	print("Unit " .. unit.unit.name .. " attacked " .. target.unit.name .. " for " .. actualDamage .. " damage")
+	print("Unit " .. unit.unit.name .. " completed attack on " .. target.unit.name .. " for " .. actualDamage .. " damage")
 end
 
 -- Check if a team is defeated (all units dead)

@@ -34,7 +34,8 @@ export type Unit = {
 	items: {[string]: Item},
 	imageAssetId: string,
 	starIndicator: ("none" | "silver" | "gold")?, -- Star indicator for shop units
-	soldOut: boolean? -- Whether the unit is sold out in shop
+	soldOut: boolean?, -- Whether the unit is sold out in shop
+	projectileName: string? -- Name of projectile model in ReplicatedStorage.Projectiles (nil for melee)
 }
 
 -- Unit stats

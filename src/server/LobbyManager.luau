@@ -11,6 +11,10 @@ local Lighting = game:GetService("Lighting")
 local Terrain = workspace.Terrain
 
 local LobbyManager = {}
+-- Throttle tables for arena selection persistence (shared across handler invocations)
+local _lastArenaSaveTimes: {[number]: number} = {}
+local _pendingArenaSaves: {[number]: boolean} = {}
+local ARENA_SAVE_THROTTLE = 30 -- seconds between forced arena selection saves
 
 -- Lobby configuration
 local MAX_PLAYERS_PER_LOBBY = Constants.MAX_PLAYERS_PER_LOBBY
@@ -215,6 +219,86 @@ function LobbyManager.setupRemoteEventHandlers()
 		print("Player " .. player.Name .. " requesting battle start for challenge " .. challengeId)
 		PVPChallengeManager.startBattle(challengeId)
 	end)
+
+	-- Handle arena switching
+	local switchArenaEvent = remoteEventsFolder:FindFirstChild(Constants.REMOTE_EVENT_NAMES.SWITCH_ARENA)
+	if switchArenaEvent then
+		switchArenaEvent.OnServerEvent:Connect(function(player, newArenaName)
+			print("Player " .. player.Name .. " requested arena switch to '" .. tostring(newArenaName) .. "'")
+			if typeof(newArenaName) ~= "string" then return end
+
+			-- Normalize request (handle frames named VolcanicArenaFrame without space)
+			local function normalize(s: string): string
+				return s:lower():gsub("%s+", ""):gsub("_", "")
+			end
+			local inputOriginal = newArenaName
+			local arenasFolder = game.ReplicatedStorage:FindFirstChild("Arenas")
+			if arenasFolder then
+				local normalizedInput = normalize(newArenaName)
+				for _, child in ipairs(arenasFolder:GetChildren()) do
+					if normalize(child.Name) == normalizedInput then
+						if child.Name ~= newArenaName then
+							print("Resolved arena name '" .. newArenaName .. "' -> '" .. child.Name .. "'")
+						end
+						newArenaName = child.Name
+						break
+					end
+				end
+			end
+
+			-- Validate template exists after normalization
+			if not arenasFolder or not arenasFolder:FindFirstChild(newArenaName) then
+				warn("Invalid arena switch request - template missing: " .. tostring(inputOriginal))
+				return
+			end
+			-- Update player data
+			local PlayerDataManager = require(script.Parent.PlayerData)
+			local data = PlayerDataManager.getPlayerData(player.UserId)
+			if not data then return end
+			data.selectedArenaName = newArenaName
+			data.lastUpdated = os.time()
+			-- Decide whether to persist immediately or throttle
+			local now = os.time()
+			local last = _lastArenaSaveTimes[player.UserId] or 0
+			if now - last >= ARENA_SAVE_THROTTLE then
+				local saved = PlayerDataManager.savePlayerData(player.UserId)
+				if saved then
+					_lastArenaSaveTimes[player.UserId] = now
+				end
+			else
+				if not _pendingArenaSaves[player.UserId] then
+					_pendingArenaSaves[player.UserId] = true
+					spawn(function()
+						local delayRemaining = ARENA_SAVE_THROTTLE - (now - last)
+						wait(math.clamp(delayRemaining, 5, ARENA_SAVE_THROTTLE))
+						local latestData = PlayerDataManager.getPlayerData(player.UserId)
+						if latestData then
+							local saved2 = PlayerDataManager.savePlayerData(player.UserId)
+							if saved2 then
+								_lastArenaSaveTimes[player.UserId] = os.time()
+							end
+						end
+						_pendingArenaSaves[player.UserId] = false
+					end)
+				end
+			end
+			-- Perform physical switch
+			local lobbyData = LobbyManager.getPlayerLobby(player.UserId)
+			if lobbyData and lobbyData.arenaSpawner then
+				local success = lobbyData.arenaSpawner:switchArenaForPlayer(player.UserId, newArenaName)
+				if success then
+					-- Resend player data so client can update checkmark
+					local updatePlayerDataEvent2 = remoteEventsFolder:WaitForChild("UpdatePlayerData")
+					updatePlayerDataEvent2:FireClient(player, data)
+					-- Optional notification
+					local notify = remoteEventsFolder:FindFirstChild(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
+					if notify then
+						notify:FireClient(player, "Arena switched to " .. newArenaName, 2)
+					end
+				end
+			end
+		end)
+	end
 	
 	print("Server-side RemoteEvent handlers set up successfully!")
 end
@@ -304,23 +388,22 @@ end
 
 -- Function to initialize a player in a specific lobby
 function LobbyManager.initializePlayerInLobby(playerId: number, player: Player, lobbyData: any, playerIndex: number)
-	-- Create the player's arena structure (generalized)
+	-- Load or create player data FIRST so arena spawner can use selectedArenaName
+	local PlayerDataManager = require(script.Parent.PlayerData)
+	local playerData = PlayerDataManager.getPlayerData(playerId)
+	if not playerData then
+		print("[LobbyManager] Loading player data before arena spawn for " .. player.Name)
+		playerData = PlayerDataManager.loadPlayerData(playerId, player.Name)
+	end
+
+	-- Now create the player's arena structure using their saved selection
 	local playerArena = lobbyData.arenaSpawner:createPlayerArena(playerId, player.Name, playerIndex)
 	if not playerArena then
 		warn("Failed to create arena for player " .. player.Name .. " in lobby " .. lobbyData.lobbyId)
 		return
 	end
-	
-	-- Initialize player data and shop for this player
-	print("Initializing player data and shop for " .. player.Name .. " in lobby " .. lobbyData.lobbyId)
-	
-	-- Load or create player data
-	local PlayerDataManager = require(script.Parent.PlayerData)
-	local playerData = PlayerDataManager.getPlayerData(playerId)
-	if not playerData then
-		print("Creating new player data for " .. player.Name)
-		playerData = PlayerDataManager.loadPlayerData(playerId, player.Name)
-	end
+
+	print("Initializing shop for " .. player.Name .. " in lobby " .. lobbyData.lobbyId)
 	
 	-- Initialize shop for this player
 	local ShopManager = require(script.Parent.ShopManager)
@@ -334,8 +417,8 @@ function LobbyManager.initializePlayerInLobby(playerId: number, player: Player, 
 	print("Sending shop data to " .. player.Name)
 	ShopManager.sendShopToClient(playerId)
 	
-	-- Send initial player data to client
-	print("Sending initial player data to " .. player.Name)
+	-- Send initial player data to client (after arena has spawned with correct selection)
+	print("Sending initial player data (arena selection: " .. tostring(playerData.selectedArenaName) .. ") to " .. player.Name)
 	local updatePlayerDataEvent = game.ReplicatedStorage.RemoteEvents:WaitForChild("UpdatePlayerData")
 	updatePlayerDataEvent:FireClient(player, playerData)
 	
