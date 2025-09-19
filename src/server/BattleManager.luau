@@ -44,7 +44,8 @@ local BattleUnit = {
 	isAlive = true,
 	originalPosition = Vector3.new(0, 0, 0),
 	originalParent = nil, -- Original parent Instance (expected to be a Hex_ part)
-	originalHexName = nil -- Name of the original hex parent (easier re-parenting on reset)
+	originalHexName = nil, -- Name of the original hex parent (easier re-parenting on reset)
+	originalYaw = 0 -- Y-axis orientation at battle start to restore default facing after battle
 }
 
 -- Active battles storage
@@ -84,6 +85,10 @@ local function createBattleUnit(model: Model, unit: DataStructures.Unit, team: n
 	local humanoid = model:FindFirstChild("Humanoid")
 	local currentHealth = humanoid and humanoid.Health or unit.stats.health
 	local maxHealth = humanoid and humanoid.MaxHealth or unit.stats.health
+
+	-- Capture the unit's original yaw (default facing) so we can restore it after battle
+	local pivotCF = model:GetPivot()
+	local _, originalYaw, _ = pivotCF:ToOrientation()
 	
 	-- Generate a unique battle unit id to track reservations and identity during battle
 	local uniqueId = (unit.id or "unit") .. "_" .. tostring(os.time()) .. "_" .. tostring(math.random(100000, 999999))
@@ -101,7 +106,8 @@ local function createBattleUnit(model: Model, unit: DataStructures.Unit, team: n
 		originalPosition = model:GetPivot().Position,
 		originalParent = model.Parent,
 		originalHexName = (model.Parent and typeof(model.Parent.Name) == "string" and model.Parent.Name:find("Hex_") and model.Parent.Name) or nil,
-		battleUnitId = uniqueId
+		battleUnitId = uniqueId,
+		originalYaw = originalYaw
 	}
 	
 	-- Store battle data in the model
@@ -853,14 +859,16 @@ local function resetUnitsAfterBattle(battleData: BattleData)
 				local unitHalf = unitSizeR.Y / 2
 				local hexTopY = hexPart.Position.Y + (hexPart.Size.Y / 2)
 				local targetPos = Vector3.new(hexPart.Position.X, hexTopY + unitHalf, hexPart.Position.Z)
-				local pivot = unit.model:GetPivot()
-				local _, _, _, r00, r01, r02, r10, r11, r12, r20, r21, r22 = pivot:GetComponents()
-				local adjustedCFrame = CFrame.new(targetPos.X, targetPos.Y, targetPos.Z, r00, r01, r02, r10, r11, r12, r20, r21, r22)
+				-- Reset orientation to the unit's original yaw captured at battle start (default facing)
+				local yaw = unit.originalYaw or 0
+				local adjustedCFrame = CFrame.new(targetPos) * CFrame.Angles(0, yaw, 0)
 				unit.model:PivotTo(adjustedCFrame)
 				unit.position = targetPos
 			else
 				-- As a last resort, move back to original world position with a small offset
-				local targetCFrame = CFrame.new(Vector3.new(unit.originalPosition.X, Constants.GROUND_LEVEL, unit.originalPosition.Z) + Vector3.new(0, BATTLE_CONSTANTS.UNIT_HEIGHT_OFFSET, 0))
+				local basePos = Vector3.new(unit.originalPosition.X, Constants.GROUND_LEVEL, unit.originalPosition.Z) + Vector3.new(0, BATTLE_CONSTANTS.UNIT_HEIGHT_OFFSET, 0)
+				local yaw = unit.originalYaw or 0
+				local targetCFrame = CFrame.new(basePos) * CFrame.Angles(0, yaw, 0)
 				unit.model:PivotTo(targetCFrame)
 				unit.position = targetCFrame.Position
 			end
