@@ -299,6 +299,64 @@ local function findClosestHex(arena: Instance, targetPosition: Vector3): Instanc
 	return closestHex
 end
 
+-- Choose the next step hex toward a target (one-hex greedy move)
+local function findNextStepHex(
+	arena: Instance,
+	currentPos: Vector3,
+	targetPos: Vector3,
+	excludeUnit: Model?,
+	excludeUnitId: string?
+): Instance?
+	-- Compute a desired step point one hex-length toward the target on XZ plane
+	local dir = targetPos - currentPos
+	dir = Vector3.new(dir.X, 0, dir.Z)
+	if dir.Magnitude < 1e-3 then
+		return nil
+	end
+	dir = dir.Unit
+	local desiredStepPos = currentPos + dir * BATTLE_CONSTANTS.HEX_SIZE
+
+	local bestHex: Instance? = nil
+	local bestCost = math.huge
+	local currentToTarget = (currentPos - targetPos).Magnitude
+
+	for _, child in pairs(arena:GetChildren()) do
+		if child.Name:find("Hex_") then
+			-- Skip occupied/reserved hexes (except our own model when checking occupancy)
+			if not isHexOccupied(child, excludeUnit) and not isHexReserved(child, excludeUnitId) then
+				-- Resolve hex world position robustly (BasePart or Model)
+				local base: BasePart? = nil
+				if child:IsA("BasePart") then
+					base = child
+				elseif child:IsA("Model") then
+					base = child.PrimaryPart or child:FindFirstChildWhichIsA("BasePart")
+				end
+				local pos: Vector3
+				if base then
+					pos = base.Position
+				elseif child:IsA("Model") then
+					pos = (child :: Model):GetPivot().Position
+				else
+					continue
+				end
+
+				-- Require progress toward the target
+				local stepToTarget = (pos - targetPos).Magnitude
+				if stepToTarget + 0.01 < currentToTarget then
+					-- Cost = distance to desired step point (prefer closer to ideal) with small tie-breaker by target distance
+					local cost = (pos - desiredStepPos).Magnitude + stepToTarget * 0.01
+					if cost < bestCost then
+						bestCost = cost
+						bestHex = child
+					end
+				end
+			end
+		end
+	end
+
+	return bestHex
+end
+
 -- Move unit towards target by moving to the next hex
 local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena: Instance)
 	if not unit.model or not target.model then
@@ -310,38 +368,59 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 	if timeSinceLastMove < BATTLE_CONSTANTS.MOVEMENT_COOLDOWN then
 		return -- Still in cooldown
 	end
-	
-	-- Find the closest unoccupied hex to the target
-	local unitId = unit.battleUnitId or unit.model:GetAttribute("BattleUnitId") or unit.model.Name
-	local targetHex = findClosestUnoccupiedHex(arena, target.position, unit.model, unitId)
-	if not targetHex then
-		-- Fallback: find any closest hex if no unoccupied ones
-		targetHex = findClosestHex(arena, target.position)
-		if not targetHex then
-			return
-		end
-	end
-	
-	-- Find the closest hex to the current unit position
-	local currentHex = findClosestHex(arena, unit.position)
-	if not currentHex then
+	-- Don't start a new tween if we're already tweening a move
+	if unit.isMoving then
 		return
 	end
 	
-	-- If we're already at the target hex, don't move
-	if currentHex == targetHex then
+	-- Identify current and next step hexes
+	local unitId = unit.battleUnitId or unit.model:GetAttribute("BattleUnitId") or unit.model.Name
+	local currentHex = findClosestHex(arena, unit.position)
+	if not currentHex then return end
+
+	-- Prefer a one-hex step toward the target to guarantee progress for melee
+	local nextHex = findNextStepHex(arena, unit.position, target.position, unit.model, unitId)
+	local pickedVia = "step"
+
+	if not nextHex then
+		-- Fallback: closest unoccupied to target (may still be suboptimal but better than nothing)
+		nextHex = findClosestUnoccupiedHex(arena, target.position, unit.model, unitId)
+		pickedVia = "closest-to-target"
+	end
+
+	if not nextHex then
+		-- Last fallback: any closest hex to target (ignores occupancy)
+		nextHex = findClosestHex(arena, target.position)
+		pickedVia = "closest-any"
+	end
+
+	if not nextHex then return end
+
+	-- If we somehow selected the same hex we already occupy, do nothing
+	if currentHex == nextHex then
 		return
 	end
 	
 	-- Check if the target hex is already occupied or reserved
-	if isHexOccupied(targetHex, unit.model) or isHexReserved(targetHex, unitId) then
+	if isHexOccupied(nextHex, unit.model) or isHexReserved(nextHex, unitId) then
 		-- Find a safer hex that's not occupied or reserved
 		local saferHex = nil
 		local closestDistance = math.huge
 		
 		for _, child in pairs(arena:GetChildren()) do
 			if child.Name:find("Hex_") and not isHexOccupied(child, unit.model) and not isHexReserved(child, unitId) then
-				local distance = (child.Position - target.position).Magnitude
+				-- Resolve child position robustly
+				local base: BasePart? = nil
+				if child:IsA("BasePart") then base = child elseif child:IsA("Model") then base = child.PrimaryPart or child:FindFirstChildWhichIsA("BasePart") end
+				local cpos: Vector3
+				if base then
+					cpos = base.Position
+				elseif child:IsA("Model") then
+					cpos = (child :: Model):GetPivot().Position
+				else
+					continue
+				end
+				local distance = (cpos - target.position).Magnitude
 				if distance < closestDistance then
 					closestDistance = distance
 					saferHex = child
@@ -350,7 +429,7 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 		end
 		
 		if saferHex then
-			targetHex = saferHex
+			nextHex = saferHex
 		else
 			-- If no safe hex found, don't move
 			return
@@ -358,7 +437,7 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 	end
 	
 	-- Reserve the target hex
-	reserveHex(targetHex, unitId)
+	reserveHex(nextHex, unitId)
 	
 	-- Release reservation on current hex if we have one
 	if currentHex then
@@ -367,16 +446,16 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 	
 	-- Move to the target hex (compute final Y so feet sit on hex top)
 	local targetPart: BasePart? = nil
-	if targetHex:IsA("BasePart") then
-		targetPart = targetHex
-	elseif targetHex:IsA("Model") then
-		targetPart = targetHex.PrimaryPart or targetHex:FindFirstChildWhichIsA("BasePart")
+	if nextHex:IsA("BasePart") then
+		targetPart = nextHex
+	elseif nextHex:IsA("Model") then
+		targetPart = nextHex.PrimaryPart or nextHex:FindFirstChildWhichIsA("BasePart")
 	end
 	local targetPosRaw: Vector3
 	if targetPart then
 		targetPosRaw = targetPart.Position
-	elseif targetHex:IsA("Model") then
-		targetPosRaw = (targetHex :: Model):GetPivot().Position
+	elseif nextHex:IsA("Model") then
+		targetPosRaw = (nextHex :: Model):GetPivot().Position
 	else
 		-- As a last fallback, avoid moving if we cannot determine a target position
 		return
@@ -387,6 +466,7 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 	local newPosition = Vector3.new(targetPosRaw.X, hexTopY + unitHalf, targetPosRaw.Z)
 	unit.position = newPosition
 	unit.lastMoveTime = tick() -- Update movement cooldown
+	unit.isMoving = true
 	
 	-- Play move animation for unit
 	local humanoid = unit.model:FindFirstChild("Humanoid")
@@ -430,10 +510,10 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 		if conn then conn:Disconnect() end
 		cfValue:Destroy()
 		unit.model:PivotTo(endLook)
-		unit.model.Parent = targetHex
+		unit.model.Parent = nextHex
 		-- Safety clamp: ensure final Y sits exactly on hex top + unit half
 		local base: BasePart? = nil
-		if targetHex:IsA("BasePart") then base = targetHex elseif targetHex:IsA("Model") then base = targetHex.PrimaryPart or targetHex:FindFirstChildWhichIsA("BasePart") end
+		if nextHex:IsA("BasePart") then base = nextHex elseif nextHex:IsA("Model") then base = nextHex.PrimaryPart or nextHex:FindFirstChildWhichIsA("BasePart") end
 		if base then
 			local curPos = unit.model:GetPivot().Position
 			local unitSizeFinal = unit.model:GetExtentsSize()
@@ -445,13 +525,16 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 				unit.position = corrected.Position
 			end
 		end
-		releaseHex(targetHex)
+		releaseHex(nextHex)
 		if moveTrack then
 			moveTrack:Stop()
 		end
+        unit.isMoving = false
 	end)
 	tween:Play()
-	print("Unit " .. unit.unit.name .. " moving to hex " .. targetHex.Name)
+	local curDist = (unit.position - target.position).Magnitude
+	local nextDist = (newPosition - target.position).Magnitude
+	print("Unit " .. unit.unit.name .. " moving to hex " .. nextHex.Name .. " via " .. pickedVia .. " (dist " .. string.format("%.1f", curDist) .. " -> " .. string.format("%.1f", nextDist) .. ")")
 end
 
 -- Attack target unit
@@ -846,6 +929,10 @@ local function runBattleLoop(battleData: BattleData)
 		-- Update each unit
 		for _, unit in ipairs(battleData.team1) do
 			if unit.isAlive then
+				-- Keep runtime position in sync with model
+				if unit.model then
+					unit.position = unit.model:GetPivot().Position
+				end
 				if ENABLE_Y_CHECK_DEBUG and unit.model and unit.model.Parent and typeof(unit.model.Parent) == "Instance" then
 					local parentHex = unit.model.Parent
 					if parentHex and typeof(parentHex.Name) == "string" and parentHex.Name:find("Hex_") then
@@ -894,6 +981,10 @@ local function runBattleLoop(battleData: BattleData)
 		-- Update team 2 units
 		for _, unit in ipairs(battleData.team2) do
 			if unit.isAlive then
+				-- Keep runtime position in sync with model
+				if unit.model then
+					unit.position = unit.model:GetPivot().Position
+				end
 				print("[DEBUG] Team 2 Unit " .. unit.unit.name .. " Position: " .. tostring(unit.position))
 				if not unit.target or not unit.target.isAlive then
 					unit.target = findClosestEnemy(unit, battleData.team1)
