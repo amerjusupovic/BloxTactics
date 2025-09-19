@@ -303,7 +303,7 @@ function PVPChallengeUI.placeUnitOnPVPBoard(unit: DataStructures.Unit, position:
 	
 	if hex then
 		-- Create unit visual using shared module
-		local _unitVisual = UnitMovement.createUnitVisual(hex, unit, x, y, nil, "PVP board")
+		local _unitVisual = UnitMovement.createUnitVisual(hex, unit, x, y, nil, "PVP board", PVPChallengeUI.requestUnitMove)
 	end
 end
 
@@ -318,10 +318,9 @@ function PVPChallengeUI.placeUnitOnPVPBench(unit: DataStructures.Unit, benchSlot
 	
 	if hex then
 		-- Create unit visual using shared module
-		local _unitVisual = UnitMovement.createUnitVisual(hex, unit, nil, nil, benchSlot, "PVP bench")
+		local _unitVisual = UnitMovement.createUnitVisual(hex, unit, nil, nil, benchSlot, "PVP bench", PVPChallengeUI.requestUnitMove)
 	end
 end
-
 
 -- Start PVP countdown timer
 function PVPChallengeUI.startPVPCountdown(duration: number)

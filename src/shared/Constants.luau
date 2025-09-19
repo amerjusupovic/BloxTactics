@@ -6,7 +6,7 @@
 local Constants = {}
 
 -- Player constants
-Constants.STARTING_GOLD = 10
+Constants.STARTING_GOLD = 10000
 Constants.STARTING_LEVEL = 1
 Constants.MAX_LEVEL = 10
 Constants.BASE_EXPERIENCE_PER_LEVEL = 100 -- Base experience for exponential calculation

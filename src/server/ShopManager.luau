@@ -883,7 +883,7 @@ function ShopManager.handleBenchUnitSell(userId: number, unitId: string, positio
 end
 
 -- Function to handle level up (buy experience)
-function ShopManager.handleLevelUp(userId: number): boolean
+function ShopManager.handleLevelUp(userId: number, size: string?): boolean
 	local playerData = PlayerDataManager.getPlayerData(userId)
 	if not playerData then return false end
 	
@@ -893,17 +893,27 @@ function ShopManager.handleLevelUp(userId: number): boolean
 		return false
 	end
 	
+	-- Determine package based on size
+	local packageSize = (size == "big") and "big" or "small"
+	local cost = Constants.LEVEL_UP_COST
+	local exp = Constants.LEVEL_UP_EXPERIENCE
+	if packageSize == "big" then
+		-- 10x of small package
+		cost = cost * 10
+		exp = exp * 10
+	end
+
 	-- Check if player has enough gold
-	if playerData.gold < Constants.LEVEL_UP_COST then
-		ShopManager.sendNotification(userId, "Insufficient gold! Need " .. Constants.LEVEL_UP_COST .. " gold.", 3)
+	if playerData.gold < cost then
+		ShopManager.sendNotification(userId, "Insufficient gold! Need " .. cost .. " gold.", 3)
 		return false
 	end
-	
+
 	-- Deduct gold
-	PlayerDataManager.spendGold(userId, Constants.LEVEL_UP_COST)
-	
+	PlayerDataManager.spendGold(userId, cost)
+
 	-- Add experience
-	PlayerDataManager.addExperience(userId, Constants.LEVEL_UP_EXPERIENCE)
+	PlayerDataManager.addExperience(userId, exp)
 	
 	-- Check if player leveled up
 	local newPlayerData = PlayerDataManager.getPlayerData(userId)
@@ -921,7 +931,7 @@ function ShopManager.handleLevelUp(userId: number): boolean
 	
 	-- Update client
 	ShopManager.sendShopToClient(userId)
-	ShopManager.sendNotification(userId, "Gained " .. Constants.LEVEL_UP_EXPERIENCE .. " experience! Cost: " .. Constants.LEVEL_UP_COST .. " gold", 2)
+	ShopManager.sendNotification(userId, "Gained " .. exp .. " experience! Cost: " .. cost .. " gold", 2)
 	
 	-- If player leveled up, show special notification and update board max units
 	if levelGained > 0 then

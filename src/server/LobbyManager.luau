@@ -137,11 +137,12 @@ function LobbyManager.setupRemoteEventHandlers()
 		ShopManager.refreshShop(player.UserId)
 	end)
 	
-	-- Handle level up
+	-- Handle level up (supports size parameter: "small"|"big")
 	local levelUpEvent = remoteEventsFolder:WaitForChild("LevelUp")
-	levelUpEvent.OnServerEvent:Connect(function(player)
-		print("Player " .. player.Name .. " attempting to level up")
-		ShopManager.handleLevelUp(player.UserId)
+	levelUpEvent.OnServerEvent:Connect(function(player, size)
+		local sizeStr = (typeof(size) == "string" and size) or "small"
+		print("Player " .. player.Name .. " attempting to level up (" .. sizeStr .. ")")
+		ShopManager.handleLevelUp(player.UserId, sizeStr)
 	end)
 	
 	-- Handle unit movement

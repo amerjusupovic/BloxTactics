@@ -18,6 +18,10 @@ local AnimationConstants = {
         Attack = "rbxassetid://123508326000264", -- Using same asset ID as Warrior for demonstration
         Move = "rbxassetid://81143734854964"
     },
+    Bomber = {
+        Attack = "rbxassetid://110712693403986", -- grenade throw test animation
+        Move = "rbxassetid://81143734854964"
+    }
     -- Add more units as needed
 }
 

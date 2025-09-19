@@ -144,9 +144,59 @@ function UnitMovement.addUnitAttributes(unitVisual: GuiObject, unit: any, x: num
 end
 
 -- Function to add click handler to a unit visual
-function UnitMovement.addUnitClickHandler(unitVisual: ImageButton, hex: GuiObject, context: string?)
-	-- Add click handler for unit selection
+function UnitMovement.addUnitClickHandler(unitVisual: ImageButton, hex: GuiObject, context: string?, onMoveUnit: ((unit: any, fromPosition: Vector2, toPosition: Vector2) -> ())?)
+	-- Add click handler that supports selecting or swapping when another unit is already selected
 	unitVisual.MouseButton1Click:Connect(function()
+		local state = UnitMovement.getSelectionState()
+
+		-- If a different unit is selected already and a move handler is available, perform a move/swap
+	if state.selectedUnit and state.selectedHex and state.selectedHex ~= hex and onMoveUnit then
+			-- Determine destination position from the clicked unit's attributes
+			local benchSlot = unitVisual:GetAttribute("BenchSlot")
+			local posX = unitVisual:GetAttribute("PositionX")
+			local posY = unitVisual:GetAttribute("PositionY")
+
+			local toPosition: Vector2?
+			if benchSlot ~= nil then
+				toPosition = Vector2.new(-benchSlot, 0)
+			elseif posX ~= nil and posY ~= nil then
+				toPosition = Vector2.new(posX, posY)
+			end
+
+			-- Fallback: derive position from hex/bench names if attributes are missing
+			if not toPosition and hex and typeof(hex.Name) == "string" then
+				local name = hex.Name
+				-- Board hexes: Hex_row_col where row/col are 1-based bottom-up
+				local rowStr, colStr = string.match(name, "^Hex_(%d+)_(%d+)$")
+				if rowStr and colStr then
+					local rows = Constants.BOARD_HEIGHT
+					local hexRow = tonumber(rowStr)
+					local hexCol = tonumber(colStr)
+					if hexRow and hexCol then
+						toPosition = Vector2.new(hexCol - 1, hexRow - 1)
+					end
+				else
+					-- Bench hexes: BenchHex_slot
+					local slotStr = string.match(name, "^BenchHex_(%d+)$")
+					if slotStr then
+						local slot = tonumber(slotStr)
+						if slot then
+							toPosition = Vector2.new(-slot, 0)
+						end
+					end
+				end
+			end
+
+			if toPosition then
+				-- Reuse moveUnit helper to compute fromPosition and invoke the callback
+				UnitMovement.moveUnit(state.selectedUnit, state.selectedHex, hex, toPosition, onMoveUnit, context)
+				UnitMovement.clearSelection()
+				return
+			end
+			-- If destination position couldn't be determined, fall back to selection
+		end
+
+		-- Default behavior: select this unit
 		UnitMovement.selectUnit(unitVisual, hex, context)
 	end)
 end
@@ -166,7 +216,7 @@ function UnitMovement.createTierLabel(unitVisual: GuiObject, tier: number)
 end
 
 -- Function to create a unit visual
-function UnitMovement.createUnitVisual(hex: GuiObject, unit: any, x: number?, y: number?, benchSlot: number?, context: string?): ImageButton
+function UnitMovement.createUnitVisual(hex: GuiObject, unit: any, x: number?, y: number?, benchSlot: number?, context: string?, onMoveUnit: ((unit: any, fromPosition: Vector2, toPosition: Vector2) -> ())?): ImageButton
 	-- Create unit visual
 	local unitVisual = Instance.new("ImageButton")
 	unitVisual.Size = UDim2.new(0.8, 0, 0.8, 0)
@@ -182,8 +232,8 @@ function UnitMovement.createUnitVisual(hex: GuiObject, unit: any, x: number?, y:
 	-- Add unit attributes
 	UnitMovement.addUnitAttributes(unitVisual, unit, x, y, benchSlot)
 	
-	-- Add click handler
-	UnitMovement.addUnitClickHandler(unitVisual, hex, context)
+	-- Add click handler (supports swap when another unit is selected)
+	UnitMovement.addUnitClickHandler(unitVisual, hex, context, onMoveUnit)
 	
 	return unitVisual
 end

@@ -354,6 +354,7 @@ function PlayerDataManager.addExperience(userId: number, amount: number): boolea
 		return false
 	end
 	
+	local oldLevel = playerData.level or 1
 	playerData.experience = playerData.experience + amount
 	
 	-- Check for level up with exponential experience requirements
@@ -364,6 +365,19 @@ function PlayerDataManager.addExperience(userId: number, amount: number): boolea
 			playerData.level = playerData.level + 1
 		else
 			break
+		end
+	end
+
+	-- If level increased, immediately update board capacity so placement respects new cap
+	if playerData.level > oldLevel then
+		local ok, err = pcall(function()
+			local Board = require(script.Parent.Board)
+			if playerData.boardState then
+				Board.updateMaxUnits(playerData.boardState, playerData.level)
+			end
+		end)
+		if not ok then
+			warn("[PlayerData] Failed to update board max units after level up for user " .. tostring(userId) .. ": " .. tostring(err))
 		end
 	end
 	

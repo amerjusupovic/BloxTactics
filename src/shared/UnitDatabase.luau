@@ -33,12 +33,12 @@ local BASE_UNITS = {
 		imageAssetId = "rbxassetid://70680696375684", -- Archer image
 		projectileName = "Arrow",
 		baseStats = {
-			health = 50,
+			health = 40,
 			attack = 20,
 			armor = 3,
 			magicResist = 3,
 			attackSpeed = 1.5,
-			range = 3
+			range = 4
 		},
 		abilities = {}
 	},
@@ -49,8 +49,8 @@ local BASE_UNITS = {
 		imageAssetId = "rbxassetid://115818046018653", -- Wizard image
 		projectileName = "Fireball",
 		baseStats = {
-			health = 40,
-			attack = 35,
+			health = 50,
+			attack = 45,
 			armor = 2,
 			magicResist = 20,
 			attackSpeed = 0.8,
@@ -70,6 +70,22 @@ local BASE_UNITS = {
 			magicResist = 15,
 			attackSpeed = 0.7,
 			range = 1
+		},
+		abilities = {}
+	},
+	{
+		id = "bomber",
+		name = "Bomber",
+		cost = 5,
+		imageAssetId = "rbxassetid://133950228729055", -- Bomber image
+		projectileName = "Bomb",
+		baseStats = {
+			health = 90,
+			attack = 55,
+			armor = 20,
+			magicResist = 20,
+			attackSpeed = 1,
+			range = 5
 		},
 		abilities = {}
 	}

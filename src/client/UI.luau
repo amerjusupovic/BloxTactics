@@ -148,11 +148,28 @@ function UI.createMainUI()
 		end)
 	end
 	
-	-- Add click handler for level up button
-	local levelUpButton = shopFrame:FindFirstChild("LevelUpButton")
-	if levelUpButton then
-		levelUpButton.MouseButton1Click:Connect(function()
-			UI.handleLevelUp()
+	-- Add click handlers for level up buttons (small & big)
+	local levelUpButtonSmall = shopFrame:FindFirstChild("LevelUpButtonSmall")
+	local levelUpButtonBig = shopFrame:FindFirstChild("LevelUpButtonBig")
+
+	-- Backward-compat: support old name "LevelUpButton" as small
+	local legacyLevelUpButton = shopFrame:FindFirstChild("LevelUpButton")
+
+	if levelUpButtonSmall and levelUpButtonSmall:IsA("GuiButton") then
+		levelUpButtonSmall.MouseButton1Click:Connect(function()
+			UI.handleLevelUp("small")
+		end)
+	end
+
+	if levelUpButtonBig and levelUpButtonBig:IsA("GuiButton") then
+		levelUpButtonBig.MouseButton1Click:Connect(function()
+			UI.handleLevelUp("big")
+		end)
+	end
+
+	if (not levelUpButtonSmall) and legacyLevelUpButton and legacyLevelUpButton:IsA("GuiButton") then
+		legacyLevelUpButton.MouseButton1Click:Connect(function()
+			UI.handleLevelUp("small")
 		end)
 	end
 	
@@ -363,11 +380,21 @@ function UI.updatePlayerStats(playerData: DataStructures.PlayerData)
 			refreshButton.Text = string.format("Refresh: %dg", refreshCost)
 		end
 
-		local levelUpButton = shopFrame:FindFirstChild("LevelUpButton")
-		if levelUpButton and levelUpButton:IsA("TextButton") then
-			-- Requested static text; assumes +10xp grants a level up or partial progress.
-			-- If this should reflect dynamic XP or gold values later, adjust accordingly.
-			levelUpButton.Text = "Level Up (+10xp): 5g"
+		-- Update text for both small and big level-up buttons if present
+		local levelUpButtonSmall = shopFrame:FindFirstChild("LevelUpButtonSmall")
+		if levelUpButtonSmall and levelUpButtonSmall:IsA("TextButton") then
+			levelUpButtonSmall.Text = "Level Up (+10xp): 5g"
+		end
+
+		local levelUpButtonBig = shopFrame:FindFirstChild("LevelUpButtonBig")
+		if levelUpButtonBig and levelUpButtonBig:IsA("TextButton") then
+			levelUpButtonBig.Text = "Level Up (+100xp): 50g"
+		end
+
+		-- Backward-compat: legacy LevelUpButton behaves as small
+		local legacyLevelUpButton = shopFrame:FindFirstChild("LevelUpButton")
+		if legacyLevelUpButton and legacyLevelUpButton:IsA("TextButton") then
+			legacyLevelUpButton.Text = "Level Up (+10xp): 5g"
 		end
 	end
 	
@@ -509,11 +536,13 @@ function UI.handleShopRefresh()
 end
 
 -- Function to handle level up (buy experience)
-function UI.handleLevelUp()
-	-- Fire RemoteEvent to server
+function UI.handleLevelUp(size: string?)
+	-- size: "small" or "big" (defaults to "small")
+	local chosenSize = (size == "big") and "big" or "small"
+	-- Fire RemoteEvent to server with size parameter
 	local levelUpEvent = game.ReplicatedStorage.RemoteEvents:WaitForChild("LevelUp")
 	if levelUpEvent then
-		levelUpEvent:FireServer()
+		levelUpEvent:FireServer(chosenSize)
 	else
 		warn("LevelUp RemoteEvent not found!")
 	end
@@ -615,7 +644,7 @@ function UI.placeUnitOnBoard(unit: DataStructures.Unit, position: Vector2)
 	
 	if hex then
 		-- Create unit visual using shared module
-		local _unitVisual = UnitMovement.createUnitVisual(hex, unit, x, y, nil, "regular board")
+	local _unitVisual = UnitMovement.createUnitVisual(hex, unit, x, y, nil, "regular board", UI.requestUnitMove)
 		
 		print("Unit placed on board at position:", position)
 	end
@@ -636,7 +665,7 @@ function UI.placeUnitOnBench(unit: DataStructures.Unit, benchSlot: number)
 	
 	if hex then
 		-- Create unit visual using shared module
-		local _unitVisual = UnitMovement.createUnitVisual(hex, unit, nil, nil, benchSlot, "regular bench")
+	local _unitVisual = UnitMovement.createUnitVisual(hex, unit, nil, nil, benchSlot, "regular bench", UI.requestUnitMove)
 		
 		print("Unit placed on bench at slot:", benchSlot)
 	end
@@ -683,6 +712,22 @@ function UI.updateBoardDisplay(boardState: DataStructures.BoardState)
 			UI.placeUnitOnBoard(unit, position)
 		else
 			print("Skipping invalid position or unit:", position, unit)
+		end
+	end
+
+	-- Bind swap-capable click handlers for any unit visuals just placed
+	if UnitMovement and UnitMovement.addUnitClickHandler then
+		for _, hex in pairs(boardFrame:GetChildren()) do
+			if hex:IsA("ImageButton") and hex.Name:find("Hex_") then
+				for _, unitVisual in pairs(hex:GetChildren()) do
+					if unitVisual:IsA("ImageButton") and unitVisual ~= hex then
+						if not unitVisual:GetAttribute("ClickBound") then
+							unitVisual:SetAttribute("ClickBound", true)
+							UnitMovement.addUnitClickHandler(unitVisual, hex, "regular board", UI.requestUnitMove)
+						end
+					end
+				end
+			end
 		end
 	end
 	
@@ -734,6 +779,22 @@ function UI.updateBenchDisplay(benchState: DataStructures.BenchState)
 			UI.placeUnitOnBench(unit, slot)
 		end
 	end
+
+	-- Bind swap-capable click handlers for any bench unit visuals just placed
+	if UnitMovement and UnitMovement.addUnitClickHandler then
+		for _, hex in pairs(benchFrame:GetChildren()) do
+			if hex:IsA("ImageButton") and hex.Name:find("BenchHex_") then
+				for _, unitVisual in pairs(hex:GetChildren()) do
+					if unitVisual:IsA("ImageButton") and unitVisual ~= hex then
+						if not unitVisual:GetAttribute("ClickBound") then
+							unitVisual:SetAttribute("ClickBound", true)
+							UnitMovement.addUnitClickHandler(unitVisual, hex, "regular bench", UI.requestUnitMove)
+						end
+					end
+				end
+			end
+		end
+	end
 end
 
 -- Function to toggle shop visibility
@@ -767,6 +828,27 @@ function UI.toggleBoard()
 	boardFrame.Visible = boardVisible
 	benchFrame.Visible = boardVisible
 	updateSellUnitFrameVisibility()
+	-- Ensure existing unit visuals have swap-capable click handlers when showing the board
+	if boardVisible then
+		if UnitMovement and UnitMovement.addUnitClickHandler then
+			local function bindForContainer(container: Instance, context: string)
+				for _, hex in pairs(container:GetChildren()) do
+					if hex:IsA("ImageButton") and hex.Name:find("Hex_") then
+						for _, unitVisual in pairs(hex:GetChildren()) do
+							if unitVisual:IsA("ImageButton") and unitVisual ~= hex then
+								if not unitVisual:GetAttribute("ClickBound") then
+									unitVisual:SetAttribute("ClickBound", true)
+									UnitMovement.addUnitClickHandler(unitVisual, hex, context, UI.requestUnitMove)
+								end
+							end
+						end
+					end
+				end
+			end
+			if boardFrame then bindForContainer(boardFrame, "regular board") end
+			if benchFrame then bindForContainer(benchFrame, "regular bench") end
+		end
+	end
 	if not boardVisible then
 		UnitMovement.clearSelection()
 	end
