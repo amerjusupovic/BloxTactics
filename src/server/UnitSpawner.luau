@@ -116,18 +116,27 @@ function UnitSpawner.spawnUnitOnBoard(userId: number, unit: any, position: Vecto
 	spawnedUnit:ScaleTo(sizeScale)
 	
 	-- Position the unit at the hex location
-	-- Adjust Y position to be on top of the hex
-	local hexCFrame = hex.CFrame
-	
-	-- Calculate unit height and position so feet touch the hex surface
+	-- Adjust Y so the unit's feet sit on top of the hex (account for hex thickness)
+	-- Resolve a BasePart representing the hex's collider/surface
+	local hexPart: BasePart? = nil
+	if hex:IsA("BasePart") then
+		hexPart = hex
+	elseif hex:IsA("Model") then
+		hexPart = hex.PrimaryPart or hex:FindFirstChildWhichIsA("BasePart")
+	end
+	if not hexPart then
+		-- Fallback: attempt to use CFrame position as-is
+		hexPart = (hex :: any)
+	end
 	local unitSize = spawnedUnit:GetExtentsSize()
-	local unitHeight = unitSize.Y
-	-- Position the unit so its bottom (feet) touches the hex surface
-	-- The model's center should be positioned at half the unit height above the hex
-	local heightOffset = unitHeight / 2
-	
-	-- Create CFrame with position and rotation to face forward
-	local adjustedCFrame = CFrame.new(hexCFrame.Position + Vector3.new(0, heightOffset, 0)) * CFrame.Angles(0, 0, 0)
+	local unitHalf = unitSize.Y / 2
+	local hexTopY = hexPart.Position.Y + (hexPart.Size.Y / 2)
+	local targetPos = Vector3.new(hexPart.Position.X, hexTopY + unitHalf, hexPart.Position.Z)
+
+	-- Preserve current model orientation, only change position
+	local pivotCFrame = spawnedUnit:GetPivot()
+	local _, _, _, r00, r01, r02, r10, r11, r12, r20, r21, r22 = pivotCFrame:GetComponents()
+	local adjustedCFrame = CFrame.new(targetPos.X, targetPos.Y, targetPos.Z, r00, r01, r02, r10, r11, r12, r20, r21, r22)
 	spawnedUnit:PivotTo(adjustedCFrame)
 	
 	-- Store unit data in the model
@@ -197,19 +206,24 @@ function UnitSpawner.spawnUnitOnBench(userId: number, unit: any, benchSlot: numb
 	-- Scale the entire model using the top-level Scale property
 	spawnedUnit:ScaleTo(sizeScale)
 	
-	-- Position the unit at the bench location
-	-- Adjust Y position to be on top of the bench
-	local benchCFrame = bench.CFrame
-	
-	-- Calculate unit height and position so feet touch the bench surface
+	-- Position the unit at the bench location with feet on top (account for bench thickness)
+	-- Resolve a BasePart representing the bench slot's surface
+	local benchPart: BasePart? = nil
+	if bench:IsA("BasePart") then
+		benchPart = bench
+	elseif bench:IsA("Model") then
+		benchPart = bench.PrimaryPart or bench:FindFirstChildWhichIsA("BasePart")
+	end
+	if not benchPart then
+		benchPart = (bench :: any)
+	end
 	local unitSize = spawnedUnit:GetExtentsSize()
-	local unitHeight = unitSize.Y
-	-- Position the unit so its bottom (feet) touches the bench surface
-	-- The model's center should be positioned at half the unit height above the bench
-	local heightOffset = unitHeight / 2
-	
-	-- Create CFrame with position and rotation to face forward
-	local adjustedCFrame = CFrame.new(benchCFrame.Position + Vector3.new(0, heightOffset, 0)) * CFrame.Angles(0, 0, 0)
+	local unitHalf = unitSize.Y / 2
+	local benchTopY = benchPart.Position.Y + (benchPart.Size.Y / 2)
+	local targetPos = Vector3.new(benchPart.Position.X, benchTopY + unitHalf, benchPart.Position.Z)
+	local pivotCFrame = spawnedUnit:GetPivot()
+	local _, _, _, r00, r01, r02, r10, r11, r12, r20, r21, r22 = pivotCFrame:GetComponents()
+	local adjustedCFrame = CFrame.new(targetPos.X, targetPos.Y, targetPos.Z, r00, r01, r02, r10, r11, r12, r20, r21, r22)
 	spawnedUnit:PivotTo(adjustedCFrame)
 	
 	-- Store unit data in the model
@@ -374,14 +388,23 @@ function UnitSpawner.moveUnitBetweenBenchSlots(userId: number, fromSlot: number,
 		-- Move the unit to the new bench slot
 		unitModel.Parent = toBench
 		
-		-- Reposition the unit at the new bench location
-		local benchCFrame = toBench.CFrame
+		-- Reposition the unit at the new bench location (feet on top)
+		local benchPart: BasePart? = nil
+		if toBench:IsA("BasePart") then
+			benchPart = toBench
+		elseif toBench:IsA("Model") then
+			benchPart = toBench.PrimaryPart or toBench:FindFirstChildWhichIsA("BasePart")
+		end
+		if not benchPart then
+			benchPart = (toBench :: any)
+		end
 		local unitSize = unitModel:GetExtentsSize()
-		local unitHeight = unitSize.Y
-		local heightOffset = unitHeight / 2
-		
-		-- Create CFrame with position and rotation to face forward
-		local adjustedCFrame = CFrame.new(benchCFrame.Position + Vector3.new(0, heightOffset, 0)) * CFrame.Angles(0, 0, 0)
+		local unitHalf = unitSize.Y / 2
+		local benchTopY = benchPart.Position.Y + (benchPart.Size.Y / 2)
+		local targetPos = Vector3.new(benchPart.Position.X, benchTopY + unitHalf, benchPart.Position.Z)
+		local pivotCFrame = unitModel:GetPivot()
+		local _, _, _, r00, r01, r02, r10, r11, r12, r20, r21, r22 = pivotCFrame:GetComponents()
+		local adjustedCFrame = CFrame.new(targetPos.X, targetPos.Y, targetPos.Z, r00, r01, r02, r10, r11, r12, r20, r21, r22)
 		unitModel:PivotTo(adjustedCFrame)
 		
 		print("Successfully moved unit from bench slot " .. fromSlot .. " to bench slot " .. toSlot)

@@ -6,7 +6,7 @@
 local Constants = {}
 
 -- Player constants
-Constants.STARTING_GOLD = 10000
+Constants.STARTING_GOLD = 10
 Constants.STARTING_LEVEL = 1
 Constants.MAX_LEVEL = 10
 Constants.BASE_EXPERIENCE_PER_LEVEL = 100 -- Base experience for exponential calculation
@@ -63,8 +63,8 @@ Constants.PLAYER_SPAWN_FORWARD_OFFSET = -70
 -- Board Detection constants
 Constants.BOARD_DETECTION_ZONE_SIZE = Vector3.new(200, 10, 200) -- 100 unit radius detection zone
 Constants.BOARD_DETECTION_ZONE_HEIGHT = 5 -- Height above ground
-Constants.BOARD_DETECTION_ZONE_FORWARD_OFFSET = -40 -- Move back 40 units in Z direction
-Constants.BOARD_DETECTION_ZONE_RADIUS = 100 -- Detection radius in units
+Constants.BOARD_DETECTION_ZONE_FORWARD_OFFSET = -25 -- Move back 25 units in Z direction
+Constants.BOARD_DETECTION_ZONE_RADIUS = 105 -- Detection radius in units
 
 -- Network constants
 Constants.REMOTE_EVENT_NAMES = {

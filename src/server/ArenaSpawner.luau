@@ -4,6 +4,7 @@
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
 local Constants = require(game.ReplicatedStorage.Shared.Constants)
 local PlayerData = require(script.Parent.PlayerData)
 
@@ -487,6 +488,22 @@ function ArenaSpawner:switchArenaForPlayer(playerId: number, newArenaName: strin
 	if currentArena then
 		transferUnits(currentArena, newArena)
 		currentArena:Destroy()
+	end
+
+	-- Recreate BoardDetection zone now that the new arena is active
+	-- We call after destroying the old arena to avoid creating the zone on the soon-to-be-destroyed model
+	local okBD, BoardDetection = pcall(function()
+		return require(script.Parent.BoardDetection)
+	end)
+	if okBD and BoardDetection then
+		local player = Players:GetPlayerByUserId(playerId)
+		local playerName = player and player.Name or tostring(playerId)
+		-- BoardDetection expects a lobbyData-like table with spawnPoints
+		pcall(function()
+			BoardDetection.createBoardArea(playerId, playerName, { spawnPoints = self.spawnPoints })
+		end)
+	else
+		warn("[ArenaSpawner] BoardDetection module unavailable; board detection zone not recreated after arena switch for player " .. tostring(playerId))
 	end
 
 	-- Re-establish Edit Arena interactions on new arena (reuse logic by calling portion of createPlayerArena logic)

@@ -461,6 +461,16 @@ function LobbyManager.removePlayerFromLobby(playerId: number)
 	
 	-- Cleanup player resources using the arena spawner
 	lobbyData.arenaSpawner:removeArena(playerId)
+
+	-- Cleanup board detection references to avoid stale entries
+	local okBD, BoardDetection = pcall(function()
+		return require(script.Parent.BoardDetection)
+	end)
+	if okBD and BoardDetection then
+		pcall(function()
+			BoardDetection.removeBoardArea(playerId)
+		end)
+	end
 	
 	print("Removed player " .. playerId .. " from lobby " .. lobbyId .. " (Remaining: " .. lobbyData.playerCount .. ")")
 	

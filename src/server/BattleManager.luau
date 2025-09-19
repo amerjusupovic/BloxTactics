@@ -70,6 +70,7 @@ local BATTLE_CONSTANTS = {
 
 -- Toggle to enable very verbose per-frame attack/range logs
 local ENABLE_VERBOSE_ATTACK_DEBUG = false
+local ENABLE_Y_CHECK_DEBUG = false
 
 -- Generate unique battle ID
 local function generateBattleId(): string
@@ -221,7 +222,18 @@ end
 local function isPositionTooCloseToOccupiedHex(arena: Instance, position: Vector3, excludeUnit: Model?): boolean
 	for _, child in pairs(arena:GetChildren()) do
 		if child.Name:find("Hex_") and isHexOccupied(child, excludeUnit) then
-			local distance = (child.Position - position).Magnitude
+			local base: BasePart? = nil
+			if child:IsA("BasePart") then base = child elseif child:IsA("Model") then base = child.PrimaryPart or child:FindFirstChildWhichIsA("BasePart") end
+			local pos: Vector3
+			if base then
+				pos = base.Position
+			elseif child:IsA("Model") then
+				pos = (child :: Model):GetPivot().Position
+			else
+				-- Skip if no usable position
+				continue
+			end
+			local distance = (pos - position).Magnitude
 			if distance < BATTLE_CONSTANTS.HEX_OCCUPANCY_CHECK_DISTANCE then
 				return true
 			end
@@ -237,7 +249,18 @@ local function findClosestUnoccupiedHex(arena: Instance, targetPosition: Vector3
 	
 	for _, child in pairs(arena:GetChildren()) do
 		if child.Name:find("Hex_") and not isHexOccupied(child, excludeUnit) and not isHexReserved(child, excludeUnitId) then
-			local distance = (child.Position - targetPosition).Magnitude
+			local base: BasePart? = nil
+			if child:IsA("BasePart") then base = child elseif child:IsA("Model") then base = child.PrimaryPart or child:FindFirstChildWhichIsA("BasePart") end
+			local pos: Vector3
+			if base then
+				pos = base.Position
+			elseif child:IsA("Model") then
+				pos = (child :: Model):GetPivot().Position
+			else
+				-- No reliable position, skip
+				continue
+			end
+			local distance = (pos - targetPosition).Magnitude
 			if distance < closestDistance then
 				closestDistance = distance
 				closestHex = child
@@ -255,7 +278,17 @@ local function findClosestHex(arena: Instance, targetPosition: Vector3): Instanc
 	
 	for _, child in pairs(arena:GetChildren()) do
 		if child.Name:find("Hex_") then
-			local distance = (child.Position - targetPosition).Magnitude
+			local base: BasePart? = nil
+			if child:IsA("BasePart") then base = child elseif child:IsA("Model") then base = child.PrimaryPart or child:FindFirstChildWhichIsA("BasePart") end
+			local pos: Vector3
+			if base then
+				pos = base.Position
+			elseif child:IsA("Model") then
+				pos = (child :: Model):GetPivot().Position
+			else
+				continue
+			end
+			local distance = (pos - targetPosition).Magnitude
 			if distance < closestDistance then
 				closestDistance = distance
 				closestHex = child
@@ -332,8 +365,26 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 		releaseHex(currentHex)
 	end
 	
-	-- Move to the target hex
-	local newPosition = targetHex.Position
+	-- Move to the target hex (compute final Y so feet sit on hex top)
+	local targetPart: BasePart? = nil
+	if targetHex:IsA("BasePart") then
+		targetPart = targetHex
+	elseif targetHex:IsA("Model") then
+		targetPart = targetHex.PrimaryPart or targetHex:FindFirstChildWhichIsA("BasePart")
+	end
+	local targetPosRaw: Vector3
+	if targetPart then
+		targetPosRaw = targetPart.Position
+	elseif targetHex:IsA("Model") then
+		targetPosRaw = (targetHex :: Model):GetPivot().Position
+	else
+		-- As a last fallback, avoid moving if we cannot determine a target position
+		return
+	end
+	local unitSizeNow = unit.model:GetExtentsSize()
+	local unitHalf = unitSizeNow.Y / 2
+	local hexTopY = (targetPart and (targetPart.Position.Y + (targetPart.Size.Y / 2))) or targetPosRaw.Y
+	local newPosition = Vector3.new(targetPosRaw.X, hexTopY + unitHalf, targetPosRaw.Z)
 	unit.position = newPosition
 	unit.lastMoveTime = tick() -- Update movement cooldown
 	
@@ -349,16 +400,16 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 
 	-- Compute yaw-only facing and tween the model's pivot using a CFrameValue
 	local startPos = unit.model:GetPivot().Position
-	local endPos = newPosition + Vector3.new(0, BATTLE_CONSTANTS.UNIT_HEIGHT_OFFSET, 0)
-	local flatTargetStart = Vector3.new(endPos.X, startPos.Y, endPos.Z)
+	-- Face along the horizontal direction towards the destination while keeping current yaw as baseline
+	local flatTargetStart = Vector3.new(newPosition.X, startPos.Y, newPosition.Z)
 	local startLook = CFrame.new(startPos, flatTargetStart)
 	local _, startYaw = startLook:ToOrientation()
-	local endLook = CFrame.new(endPos) * CFrame.Angles(0, startYaw, 0)
+	local endLook = CFrame.new(newPosition) * CFrame.Angles(0, startYaw, 0)
 
-	-- Set initial facing
+	-- Apply initial facing/pivot
 	unit.model:PivotTo(startLook)
 
-	-- Tween pivot to endLook to keep facing
+	-- Tween pivot to endLook to keep facing with correct final Y
 	local TweenService = game:GetService("TweenService")
 	local cfValue = Instance.new("CFrameValue")
 	cfValue.Value = startLook
@@ -380,6 +431,20 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 		cfValue:Destroy()
 		unit.model:PivotTo(endLook)
 		unit.model.Parent = targetHex
+		-- Safety clamp: ensure final Y sits exactly on hex top + unit half
+		local base: BasePart? = nil
+		if targetHex:IsA("BasePart") then base = targetHex elseif targetHex:IsA("Model") then base = targetHex.PrimaryPart or targetHex:FindFirstChildWhichIsA("BasePart") end
+		if base then
+			local curPos = unit.model:GetPivot().Position
+			local unitSizeFinal = unit.model:GetExtentsSize()
+			local expectedY = base.Position.Y + (base.Size.Y / 2) + (unitSizeFinal.Y / 2)
+			if math.abs(curPos.Y - expectedY) > 0.02 then
+				local corrected = CFrame.new(Vector3.new(base.Position.X, expectedY, base.Position.Z)) * CFrame.Angles(0, select(2, startLook:ToOrientation()), 0)
+				unit.model:PivotTo(corrected)
+				print("[BattleManager] Corrected unit Y after tween to prevent sinking: " .. unit.unit.name)
+				unit.position = corrected.Position
+			end
+		end
 		releaseHex(targetHex)
 		if moveTrack then
 			moveTrack:Stop()
@@ -666,18 +731,22 @@ local function resetUnitsAfterBattle(battleData: BattleData)
 			end
 			if targetHex then
 				unit.model.Parent = targetHex
-				-- Position feet on hex surface similar to UnitSpawner
-				local hexCFrame = (targetHex :: any).CFrame
-				local unitSize = unit.model:GetExtentsSize()
-				local heightOffset = unitSize.Y / 2
-				local adjustedCFrame = CFrame.new(hexCFrame.Position + Vector3.new(0, heightOffset, 0))
+				-- Position feet on hex surface using part thickness
+				local hexPart = targetHex :: BasePart
+				local unitSizeR = unit.model:GetExtentsSize()
+				local unitHalf = unitSizeR.Y / 2
+				local hexTopY = hexPart.Position.Y + (hexPart.Size.Y / 2)
+				local targetPos = Vector3.new(hexPart.Position.X, hexTopY + unitHalf, hexPart.Position.Z)
+				local pivot = unit.model:GetPivot()
+				local _, _, _, r00, r01, r02, r10, r11, r12, r20, r21, r22 = pivot:GetComponents()
+				local adjustedCFrame = CFrame.new(targetPos.X, targetPos.Y, targetPos.Z, r00, r01, r02, r10, r11, r12, r20, r21, r22)
 				unit.model:PivotTo(adjustedCFrame)
-				unit.position = unit.originalPosition
+				unit.position = targetPos
 			else
 				-- As a last resort, move back to original world position with a small offset
-				local targetCFrame = CFrame.new(unit.originalPosition + Vector3.new(0, BATTLE_CONSTANTS.UNIT_HEIGHT_OFFSET, 0))
+				local targetCFrame = CFrame.new(Vector3.new(unit.originalPosition.X, Constants.GROUND_LEVEL, unit.originalPosition.Z) + Vector3.new(0, BATTLE_CONSTANTS.UNIT_HEIGHT_OFFSET, 0))
 				unit.model:PivotTo(targetCFrame)
-				unit.position = unit.originalPosition
+				unit.position = targetCFrame.Position
 			end
 
 			print("Reset unit " .. unit.unit.name .. " to original state")
@@ -744,6 +813,21 @@ local function runBattleLoop(battleData: BattleData)
 		-- Update each unit
 		for _, unit in ipairs(battleData.team1) do
 			if unit.isAlive then
+				if ENABLE_Y_CHECK_DEBUG and unit.model and unit.model.Parent and typeof(unit.model.Parent) == "Instance" then
+					local parentHex = unit.model.Parent
+					if parentHex and typeof(parentHex.Name) == "string" and parentHex.Name:find("Hex_") then
+						local base: BasePart? = nil
+						if parentHex:IsA("BasePart") then base = parentHex elseif parentHex:IsA("Model") then base = parentHex.PrimaryPart or parentHex:FindFirstChildWhichIsA("BasePart") end
+						if base then
+							local size = unit.model:GetExtentsSize()
+							local expectedY = base.Position.Y + (base.Size.Y/2) + (size.Y/2)
+							local curY = unit.model:GetPivot().Position.Y
+							if math.abs(curY - expectedY) > 0.05 then
+								print(string.format("[Y-DEBUG] %s off-surface by %.3f studs", unit.unit.name, curY - expectedY))
+							end
+						end
+					end
+				end
 				print("[DEBUG] Team 1 Unit " .. unit.unit.name .. " Position: " .. tostring(unit.position))
 				if not unit.target or not unit.target.isAlive then
 					unit.target = findClosestEnemy(unit, battleData.team2)

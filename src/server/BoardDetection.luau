@@ -15,6 +15,15 @@ local playerBoardAreas = {} -- {playerId = boardArea}
 
 -- Create board area for a player
 function BoardDetection.createBoardArea(playerId: number, playerName: string, lobbyData: any)
+	-- If an old board area exists (e.g., after arena switch), clean it up first
+	local existing = playerBoardAreas[playerId]
+	if existing then
+		if existing.Parent then
+			existing:Destroy()
+		end
+		playerBoardAreas[playerId] = nil
+	end
+
 	-- Find the player's arena in the lobby's SpawnPoints
 	local spawnPoints = lobbyData and lobbyData.spawnPoints
 	if not spawnPoints then
@@ -35,6 +44,15 @@ function BoardDetection.createBoardArea(playerId: number, playerName: string, lo
 			break
 		end
 	end
+	-- Fallback: accept any child containing 'Arena' if strict match failed (handles names like 'VolcanicArena')
+	if not grassArena then
+		for _, child in pairs(playerFolder:GetChildren()) do
+			if string.find(child.Name, "Arena") then
+				grassArena = child
+				break
+			end
+		end
+	end
 	if not grassArena then
 		warn("Arena not found for player " .. playerName .. " in lobby")
 		return nil
@@ -44,29 +62,29 @@ function BoardDetection.createBoardArea(playerId: number, playerName: string, lo
 	local detectionZone = Instance.new("Part")
 	detectionZone.Name = "BoardDetectionZone"
 	detectionZone.Size = Constants.BOARD_DETECTION_ZONE_SIZE
-	
-	-- Get the position of the arena (handle both Model and Folder cases)
-	local arenaPosition
+
+	-- Compute arena pivot and forward to place zone with correct orientation
+	local arenaPos: Vector3
+	local forward: Vector3 = Vector3.new(0, 0, 1)
 	if grassArena:IsA("Model") then
-		-- For Models, use GetPivot() to get the center position
-		arenaPosition = grassArena:GetPivot().Position
+		local pivot = grassArena:GetPivot()
+		arenaPos = pivot.Position
+		forward = pivot.LookVector -- model's forward
 	else
 		-- For Folders, try to find a part to get position from
 		local firstPart = grassArena:FindFirstChildOfClass("BasePart")
 		if firstPart then
-			arenaPosition = firstPart.Position
+			arenaPos = firstPart.Position
+			-- Approximate forward as +Z in world if no model rotation
 		else
-			-- Fallback to origin if no parts found
-			arenaPosition = Vector3.new(0, 0, 0)
+			arenaPos = Vector3.new(0, 0, 0)
 		end
 	end
-	
-	-- Position the zone at character height with forward offset
-	detectionZone.Position = Vector3.new(
-		arenaPosition.X, 
-		Constants.BOARD_DETECTION_ZONE_HEIGHT, 
-		arenaPosition.Z + Constants.BOARD_DETECTION_ZONE_FORWARD_OFFSET
-	)
+
+	-- Position the zone at fixed height with forward offset relative to arena orientation
+	local zonePos = Vector3.new(arenaPos.X, Constants.BOARD_DETECTION_ZONE_HEIGHT, arenaPos.Z)
+	zonePos += forward.Unit * Constants.BOARD_DETECTION_ZONE_FORWARD_OFFSET
+	detectionZone.Position = zonePos
 	detectionZone.Anchored = true
 	detectionZone.CanCollide = false
 	detectionZone.Transparency = 1 -- Invisible
