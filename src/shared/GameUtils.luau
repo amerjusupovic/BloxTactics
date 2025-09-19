@@ -17,17 +17,6 @@ function GameUtils.calculateSellValue(unitCost: number): number
 	return math.ceil(unitCost / 2)
 end
 
--- Function to calculate interest earned on gold
-function GameUtils.calculateInterest(gold: number): number
-	local interest = math.floor(gold * Constants.INTEREST_RATE)
-	return math.min(interest, Constants.MAX_INTEREST)
-end
-
--- Function to calculate streak bonus gold
-function GameUtils.calculateStreakBonus(streak: number): number
-	return streak * Constants.STREAK_BONUS
-end
-
 -- Function to check if a player can level up
 function GameUtils.canLevelUp(currentLevel: number, currentExperience: number): boolean
 	if currentLevel >= Constants.MAX_LEVEL then
