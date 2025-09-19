@@ -41,6 +41,16 @@ Constants.UNITS_FOR_TIER_UP = 3
 Constants.BATTLE_PREPARATION_TIME = 15 -- seconds
 Constants.BATTLE_TIMEOUT = 300 -- seconds
 
+-- Effects / VFX constants
+-- Lifetime for impact effects spawned at projectile targets
+Constants.PROJECTILE_IMPACT_EFFECT_DURATION = 0.3 -- seconds
+
+-- Mapping of projectile name -> impact effect name under ReplicatedStorage.Effects
+-- For now, only Bomb has an Explosion effect
+Constants.PROJECTILE_IMPACT_EFFECTS = {
+	Bomb = "Explosion",
+}
+
 -- Challenge constants
 Constants.MIN_WAGER = 10
 Constants.MAX_WAGER = 1000

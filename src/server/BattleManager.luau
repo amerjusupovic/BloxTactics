@@ -483,6 +483,37 @@ local function spawnProjectileIfNeeded(unit: BattleUnit, target: BattleUnit): bo
 	local startPos = unit.model:GetPivot().Position + Vector3.new(0, BATTLE_CONSTANTS.UNIT_HEIGHT_OFFSET, 0)
 	local endPos = target.model:GetPivot().Position + Vector3.new(0, BATTLE_CONSTANTS.UNIT_HEIGHT_OFFSET, 0)
 
+	-- Resolve impact effect (optional)
+	local impactEffectName: string? = nil
+	if Constants and Constants.PROJECTILE_IMPACT_EFFECTS then
+		impactEffectName = Constants.PROJECTILE_IMPACT_EFFECTS[unit.unit.projectileName]
+	end
+
+	local function spawnImpactEffect()
+		if not impactEffectName then return end
+		local effectsFolder = ReplicatedStorage:FindFirstChild("Effects")
+		if not effectsFolder then return end
+		local effectTemplate = effectsFolder:FindFirstChild(impactEffectName)
+		if not effectTemplate then return end
+		local effectClone = effectTemplate:Clone()
+		effectClone.Name = tostring(impactEffectName) .. "_Impact"
+		-- Position effect at endPos
+		if effectClone:IsA("Model") then
+			local size = effectClone:GetExtentsSize()
+			local yOff = size.Y/2
+			effectClone:PivotTo(CFrame.new(endPos + Vector3.new(0, yOff, 0)))
+		elseif effectClone:IsA("BasePart") then
+			effectClone.CFrame = CFrame.new(endPos)
+		end
+		effectClone.Parent = workspace
+		-- Cleanup after configured duration
+		task.delay(Constants.PROJECTILE_IMPACT_EFFECT_DURATION or 0.3, function()
+			if effectClone and effectClone.Parent then
+				effectClone:Destroy()
+			end
+		end)
+	end
+
 	-- If projectile is a Model, set its pivot; if it's a BasePart just position it
 	if cloned:IsA("Model") then
 		local pivot = cloned:GetPivot()
@@ -505,6 +536,7 @@ local function spawnProjectileIfNeeded(unit: BattleUnit, target: BattleUnit): bo
 	if cloned:IsA("BasePart") then
 		local tween = TweenService:Create(cloned, tweenInfo, {CFrame = goalCFrame})
 		tween.Completed:Connect(function()
+			spawnImpactEffect()
 			cloned:Destroy()
 		end)
 		tween:Play()
@@ -521,6 +553,7 @@ local function spawnProjectileIfNeeded(unit: BattleUnit, target: BattleUnit): bo
 		end)
 		tween.Completed:Connect(function()
 			if conn then conn:Disconnect() end
+			spawnImpactEffect()
 			cloned:Destroy()
 			cfVal:Destroy()
 		end)
