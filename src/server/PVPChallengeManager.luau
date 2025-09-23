@@ -545,7 +545,8 @@ function PVPChallengeManager.placeEnemyUnit(enemyBoard: Instance, unit: any, pos
 			local part = Instance.new("Part")
 			part.Name = "UnitPart"
 			part.Size = Vector3.new(2, 2, 2)
-			part.BrickColor = BrickColor.new("Bright red")
+			-- Use a neutral color to avoid red placeholders lingering in gameplay
+			part.BrickColor = BrickColor.new("Medium stone grey")
 			part.Material = Enum.Material.Neon
 			part.Parent = enemyUnit
 			

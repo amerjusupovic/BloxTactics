@@ -73,109 +73,12 @@ local ENABLE_VERBOSE_ATTACK_DEBUG = false
 local ENABLE_Y_CHECK_DEBUG = false
 
 -- Centralized debug toggle for animation diagnostics
-local ENABLE_ANIMATION_DEBUG = true
+local ENABLE_ANIMATION_DEBUG = false
+local ENABLE_RIG_AUDIT_DEBUG = false
 
 -- Generate unique battle ID
 local function generateBattleId(): string
 	return "battle_" .. os.time() .. "_" .. math.random(1000, 9999)
-end
-
-
--- Create a battle unit from a model and unit data
-local function createBattleUnit(model: Model, unit: DataStructures.Unit, team: number): BattleUnit
-	-- Get health from Humanoid if available, otherwise use unit stats
-	local humanoid = model:FindFirstChild("Humanoid")
-	local currentHealth = humanoid and humanoid.Health or unit.stats.health
-	local maxHealth = humanoid and humanoid.MaxHealth or unit.stats.health
-	
-	-- Generate a unique battle unit id to track reservations and identity during battle
-	local uniqueId = (unit.id or "unit") .. "_" .. tostring(os.time()) .. "_" .. tostring(math.random(100000, 999999))
-
-	local battleUnit = {
-		unit = unit,
-		model = model,
-		health = currentHealth,
-		maxHealth = maxHealth,
-		position = model:GetPivot().Position,
-		target = nil,
-		lastAttackTime = 0,
-		team = team,
-		isAlive = true,
-		originalPosition = model:GetPivot().Position,
-		originalParent = model.Parent,
-		originalHexName = (model.Parent and typeof(model.Parent.Name) == "string" and model.Parent.Name:find("Hex_") and model.Parent.Name) or nil,
-		battleUnitId = uniqueId
-	}
-	
-	-- Store battle data in the model
-	model:SetAttribute("BattleUnit", true)
-	model:SetAttribute("Team", team)
-	model:SetAttribute("Health", battleUnit.health)
-	model:SetAttribute("MaxHealth", battleUnit.maxHealth)
-	model:SetAttribute("IsAlive", true)
-	model:SetAttribute("BattleUnitId", uniqueId)
-	-- Animation diagnostics
-	local animator, aKind = resolveAnimator(model)
-	model:SetAttribute("HasAnimator", animator ~= nil)
-	if ENABLE_ANIMATION_DEBUG then
-		print(string.format("[ANIM] %s animator for model %s (kind=%s)", animator and "Found" or "Missing", model.Name, aKind))
-	end
-	
-	return battleUnit
-end
-
--- Get all units from a board (either player board or enemy board)
-local function getUnitsFromBoard(board: Instance, team: number): {BattleUnit}
-	local battleUnits = {}
-	print("DEBUG: Searching for units in board:", board.Name, "Team:", team)
-
-	for _, hex in pairs(board:GetChildren()) do
-		if hex.Name:find("Hex_") then
-			print("DEBUG: Checking hex:", hex.Name)
-			for _, child in pairs(hex:GetChildren()) do
-				if child:IsA("Model") then
-					local unitId = child:GetAttribute("UnitId")
-					local unitName = child:GetAttribute("UnitName")
-					local unitTier = child:GetAttribute("UnitTier")
-
-					local isTeam1Unit = team == 1 and (not child.Name:find("EnemyUnit_") and unitId and unitName and unitTier)
-					local isTeam2Unit = team == 2 and (child.Name:find("EnemyUnit_") and unitId and unitName and unitTier)
-
-					if isTeam1Unit or isTeam2Unit then
-						print("DEBUG: Found unit model:", child.Name)
-						print("DEBUG: Unit attributes - ID:", unitId, "Name:", unitName, "Tier:", unitTier)
-						local unitData = UnitDatabase.createUnit(unitId, unitTier)
-						if unitData then
-							print("DEBUG: Created unit data for:", unitName)
-							local battleUnit = createBattleUnit(child, unitData, team)
-							table.insert(battleUnits, battleUnit)
-							print("DEBUG: Added battle unit to team", team)
-						else
-							warn("DEBUG: Failed to create unit data for:", unitName)
-						end
-					end
-				end
-			end
-		end
-	end
-
-	if #battleUnits == 0 then
-		warn("No valid units found for team " .. tostring(team) .. " in board " .. board.Name)
-	end
-	print("DEBUG: Found", #battleUnits, "units for team", team)
-	return battleUnits
-end
-
--- Calculate distance between two positions
-local function calculateDistance(pos1: Vector3, pos2: Vector3): number
-	return (pos1 - pos2).Magnitude
-end
-
--- Planar (XZ) distance helper to avoid Y offsets affecting range checks
-local function calculatePlanarDistance(pos1: Vector3, pos2: Vector3): number
-	local a = Vector3.new(pos1.X, 0, pos1.Z)
-	local b = Vector3.new(pos2.X, 0, pos2.Z)
-	return (a - b).Magnitude
 end
 
 -- Animator resolver: works with Humanoid or AnimationController
@@ -211,6 +114,133 @@ local function resolveAnimator(model: Model): (Animator?, string)
 	return nil, "none"
 end
 
+-- Create a battle unit from a model and unit data
+local function createBattleUnit(model: Model?, unit: DataStructures.Unit, team: number): BattleUnit?
+	if not model or (typeof(model) ~= "Instance") or not model:IsA("Model") then
+		warn("[BattleManager] createBattleUnit called with invalid model; skipping unit creation")
+		return nil
+	end
+	-- Get health from Humanoid if available, otherwise use unit stats
+	local humanoid = model:FindFirstChild("Humanoid")
+	if humanoid and ENABLE_ANIMATION_DEBUG then
+		local rigType = tostring(humanoid.RigType)
+		print(string.format("[ANIM] %s rig type for model %s", rigType, model.Name))
+	end
+	-- Force health bar visibility for valid humanoids (helps diagnose missing Head)
+	if humanoid then
+		pcall(function()
+			humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOn
+			humanoid.HealthDisplayDistance = 200
+			-- Tolerate missing necks on imported rigs so animations can still run
+			humanoid.RequiresNeck = false
+		end)
+	end
+
+	local currentHealth = humanoid and humanoid.Health or unit.stats.health
+	local maxHealth = humanoid and humanoid.MaxHealth or unit.stats.health
+	
+	-- Generate a unique battle unit id to track reservations and identity during battle
+	local uniqueId = (unit.id or "unit") .. "_" .. tostring(os.time()) .. "_" .. tostring(math.random(100000, 999999))
+
+	local battleUnit = {
+		unit = unit,
+		model = model,
+		health = currentHealth,
+		maxHealth = maxHealth,
+		position = model:GetPivot().Position,
+		target = nil,
+		lastAttackTime = 0,
+		team = team,
+		isAlive = true,
+		originalPosition = model:GetPivot().Position,
+		originalParent = model.Parent,
+		originalHexName = (model.Parent and typeof(model.Parent.Name) == "string" and model.Parent.Name:find("Hex_") and model.Parent.Name) or nil,
+		battleUnitId = uniqueId
+	}
+	
+	-- Store battle data in the model
+	model:SetAttribute("BattleUnit", true)
+	model:SetAttribute("Team", team)
+	model:SetAttribute("Health", battleUnit.health)
+	model:SetAttribute("MaxHealth", battleUnit.maxHealth)
+	model:SetAttribute("IsAlive", true)
+	model:SetAttribute("BattleUnitId", uniqueId)
+	-- Animation diagnostics
+	local animator, aKind = resolveAnimator(model)
+	model:SetAttribute("HasAnimator", animator ~= nil)
+	if ENABLE_ANIMATION_DEBUG then
+		print(string.format("[ANIM] %s animator for model %s (kind=%s)", animator and "Found" or "Missing", model.Name, aKind))
+	end
+	-- Disable default Roblox Animate script if present to prevent conflicts
+	local animateScript = model:FindFirstChild("Animate")
+	if animateScript and (animateScript:IsA("LocalScript") or animateScript:IsA("Script")) then
+		(animateScript :: any).Disabled = true
+		if ENABLE_ANIMATION_DEBUG then
+			print(string.format("[ANIM] Disabled default Animate script on %s to avoid conflicts", model.Name))
+		end
+	end
+	
+	return battleUnit
+end
+
+-- Get all units from a board (either player board or enemy board)
+local function getUnitsFromBoard(board: Instance, team: number): {BattleUnit}
+	local battleUnits = {}
+	print("DEBUG: Searching for units in board:", board.Name, "Team:", team)
+
+	for _, hex in pairs(board:GetChildren()) do
+		if hex.Name:find("Hex_") then
+			print("DEBUG: Checking hex:", hex.Name)
+			for _, child in pairs(hex:GetChildren()) do
+				if child:IsA("Model") then
+					local unitId = child:GetAttribute("UnitId")
+					local unitName = child:GetAttribute("UnitName")
+					local unitTier = child:GetAttribute("UnitTier")
+
+					local isTeam1Unit = team == 1 and (not child.Name:find("EnemyUnit_") and unitId and unitName and unitTier)
+					local isTeam2Unit = team == 2 and (child.Name:find("EnemyUnit_") and unitId and unitName and unitTier)
+
+					if isTeam1Unit or isTeam2Unit then
+						print("DEBUG: Found unit model:", child.Name)
+						print("DEBUG: Unit attributes - ID:", unitId, "Name:", unitName, "Tier:", unitTier)
+						local unitData = UnitDatabase.createUnit(unitId, unitTier)
+						if unitData then
+							print("DEBUG: Created unit data for:", unitName)
+							local battleUnit = createBattleUnit(child, unitData, team)
+							if battleUnit then
+								table.insert(battleUnits, battleUnit)
+								print("DEBUG: Added battle unit to team", team)
+							else
+								warn("[BattleManager] Skipped adding unit due to invalid model in createBattleUnit")
+							end
+						else
+							warn("DEBUG: Failed to create unit data for:", unitName)
+						end
+					end
+				end
+			end
+		end
+	end
+
+	if #battleUnits == 0 then
+		warn("No valid units found for team " .. tostring(team) .. " in board " .. board.Name)
+	end
+	print("DEBUG: Found", #battleUnits, "units for team", team)
+	return battleUnits
+end
+
+-- Calculate distance between two positions
+local function calculateDistance(pos1: Vector3, pos2: Vector3): number
+	return (pos1 - pos2).Magnitude
+end
+
+-- Planar (XZ) distance helper to avoid Y offsets affecting range checks
+local function calculatePlanarDistance(pos1: Vector3, pos2: Vector3): number
+	local a = Vector3.new(pos1.X, 0, pos1.Z)
+	local b = Vector3.new(pos2.X, 0, pos2.Z)
+	return (a - b).Magnitude
+end
+
 -- Utility to play an animation by id; returns track or nil
 local function playAnimation(model: Model, animationId: string, opts: { looped: boolean?, priority: Enum.AnimationPriority? }?): AnimationTrack?
 	if not model or not animationId or animationId == "" then return nil end
@@ -231,9 +261,15 @@ local function playAnimation(model: Model, animationId: string, opts: { looped: 
 	if opts and opts.priority then
 		track.Priority = opts.priority
 	end
-	track:Play()
+	-- Play with explicit fade, weight, and speed to ensure visibility
+	pcall(function()
+		track:Play(0.1, 1.0, 1.0)
+		track:AdjustSpeed(1.0)
+	end)
 	if ENABLE_ANIMATION_DEBUG then
-		print(string.format("[ANIM] Playing %s animation on %s (id=%s looped=%s)", (opts and opts.looped) and "looped" or "one-shot", model.Name, tostring(animationId), tostring(opts and opts.looped)))
+		local lenStr = "?"
+		pcall(function() lenStr = string.format("%.2f", track.Length) end)
+		print(string.format("[ANIM] Playing %s animation on %s (id=%s looped=%s len=%s)", (opts and opts.looped) and "looped" or "one-shot", model.Name, tostring(animationId), tostring(opts and opts.looped), lenStr))
 	end
 	return track
 end
@@ -324,7 +360,7 @@ end
 
 -- Check if a position is too close to any occupied hex
 local function isPositionTooCloseToOccupiedHex(arena: Instance, position: Vector3, excludeUnit: Model?): boolean
-	for _, child in pairs(arena:GetChildren()) do
+	for _, child in pairs(arena:GetDescendants()) do
 		if child.Name:find("Hex_") and isHexOccupied(child, excludeUnit) then
 			local base: BasePart? = nil
 			if child:IsA("BasePart") then base = child elseif child:IsA("Model") then base = child.PrimaryPart or child:FindFirstChildWhichIsA("BasePart") end
@@ -350,8 +386,8 @@ end
 local function findClosestUnoccupiedHex(arena: Instance, targetPosition: Vector3, excludeUnit: Model?, excludeUnitId: string?): Instance?
 	local closestHex = nil
 	local closestDistance = math.huge
-	
-	for _, child in pairs(arena:GetChildren()) do
+    
+	for _, child in pairs(arena:GetDescendants()) do
 		if child.Name:find("Hex_") and not isHexOccupied(child, excludeUnit) and not isHexReserved(child, excludeUnitId) then
 			local base: BasePart? = nil
 			if child:IsA("BasePart") then base = child elseif child:IsA("Model") then base = child.PrimaryPart or child:FindFirstChildWhichIsA("BasePart") end
@@ -379,8 +415,8 @@ end
 local function findClosestHex(arena: Instance, targetPosition: Vector3): Instance?
 	local closestHex = nil
 	local closestDistance = math.huge
-	
-	for _, child in pairs(arena:GetChildren()) do
+    
+	for _, child in pairs(arena:GetDescendants()) do
 		if child.Name:find("Hex_") then
 			local base: BasePart? = nil
 			if child:IsA("BasePart") then base = child elseif child:IsA("Model") then base = child.PrimaryPart or child:FindFirstChildWhichIsA("BasePart") end
@@ -424,7 +460,7 @@ local function findNextStepHex(
 	local bestCost = math.huge
 	local currentToTarget = (currentPos - targetPos).Magnitude
 
-	for _, child in pairs(arena:GetChildren()) do
+	for _, child in pairs(arena:GetDescendants()) do
 		if child.Name:find("Hex_") then
 			-- Skip occupied/reserved hexes (except our own model when checking occupancy)
 			if not isHexOccupied(child, excludeUnit) and not isHexReserved(child, excludeUnitId) then
@@ -498,7 +534,12 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 		pickedVia = "closest-any"
 	end
 
-	if not nextHex then return end
+	if not nextHex then
+		if ENABLE_VERBOSE_ATTACK_DEBUG then
+			print(string.format("[MOVE] %s had no nextHex toward %s (pos=%s target=%s)", unit.unit.name, target.unit.name, tostring(unit.position), tostring(target.position)))
+		end
+		return
+	end
 
 	-- If we somehow selected the same hex we already occupy, do nothing
 	if currentHex == nextHex then
@@ -514,7 +555,7 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 		local saferHex = nil
 		local closestDistance = math.huge
 		
-		for _, child in pairs(arena:GetChildren()) do
+		for _, child in pairs(arena:GetDescendants()) do
 			if child.Name:find("Hex_") and not isHexOccupied(child, unit.model) and not isHexReserved(child, unitId) then
 				-- Resolve child position robustly
 				local base: BasePart? = nil
@@ -539,6 +580,9 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 			nextHex = saferHex
 		else
 			-- If no safe hex found, don't move
+			if ENABLE_VERBOSE_ATTACK_DEBUG then
+				print(string.format("[MOVE] %s found no safer hex; skipping move", unit.unit.name))
+			end
 			return
 		end
 	end
@@ -835,18 +879,32 @@ local function attackTarget(unit: BattleUnit, target: BattleUnit)
 	end
 	
 	-- Visual damage feedback - make the model flash red briefly
-	for _, part in pairs(target.model:GetDescendants()) do
-		if part:IsA("BasePart") then
-			-- Store original color
-			local originalColor = part.Color
-			-- Flash red
-			part.Color = Color3.new(1, 0, 0) -- Red
-			-- Reset color after a brief delay
-			spawn(function()
-				wait(0.2)
-				part.Color = originalColor
-			end)
+	-- Temporary hit highlight (non-color-changing) to show damage feedback
+	if target.model and target.model.Parent then
+		local existing = target.model:FindFirstChild("BT_DamageHighlight")
+		local hl: Instance
+		if existing and existing:IsA("Highlight") then
+			hl = existing
+		else
+			if existing then existing:Destroy() end
+			hl = Instance.new("Highlight")
+			hl.Name = "BT_DamageHighlight"
+			hl.Adornee = target.model
+			-- Subtle, readable colors; avoid red per request
+			hl.FillColor = Color3.fromRGB(255, 0, 0) -- yellow
+			hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+			hl.FillTransparency = 0.7
+			hl.OutlineTransparency = 0
+			hl.Parent = target.model
 		end
+		-- Ensure it goes away quickly
+		task.delay(0.15, function()
+			if hl and hl.Parent then
+				pcall(function()
+					if hl.Parent then hl:Destroy() end
+				end)
+			end
+		end)
 	end
 	
 	-- Update last attack time
