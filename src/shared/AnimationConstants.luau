@@ -14,7 +14,7 @@ local AnimationConstants = {
         Attack = "rbxassetid://123508326000264", -- Using same asset ID as Knight for demonstration
         Move = "rbxassetid://81143734854964"
     },
-    Tank = {
+    Paladin = {
         Attack = "rbxassetid://123508326000264", -- Using same asset ID as Knight for demonstration
         Move = "rbxassetid://81143734854964"
     },

@@ -59,16 +59,16 @@ local BASE_UNITS = {
 		abilities = {}
 	},
 	{
-		id = "tank",
-		name = "Tank",
+		id = "paladin",
+		name = "Paladin",
 		cost = 4,
-		imageAssetId = "rbxassetid://79467990236834", -- Tank image
+		imageAssetId = "rbxassetid://79467990236834", -- Paladin image
 		baseStats = {
 			health = 150,
 			attack = 20,
 			armor = 25,
 			magicResist = 15,
-			attackSpeed = 0.7,
+			attackSpeed = 0.8,
 			range = 1
 		},
 		abilities = {}

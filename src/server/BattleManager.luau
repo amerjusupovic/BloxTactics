@@ -72,6 +72,9 @@ local BATTLE_CONSTANTS = {
 local ENABLE_VERBOSE_ATTACK_DEBUG = false
 local ENABLE_Y_CHECK_DEBUG = false
 
+-- Centralized debug toggle for animation diagnostics
+local ENABLE_ANIMATION_DEBUG = true
+
 -- Generate unique battle ID
 local function generateBattleId(): string
 	return "battle_" .. os.time() .. "_" .. math.random(1000, 9999)
@@ -111,6 +114,12 @@ local function createBattleUnit(model: Model, unit: DataStructures.Unit, team: n
 	model:SetAttribute("MaxHealth", battleUnit.maxHealth)
 	model:SetAttribute("IsAlive", true)
 	model:SetAttribute("BattleUnitId", uniqueId)
+	-- Animation diagnostics
+	local animator, aKind = resolveAnimator(model)
+	model:SetAttribute("HasAnimator", animator ~= nil)
+	if ENABLE_ANIMATION_DEBUG then
+		print(string.format("[ANIM] %s animator for model %s (kind=%s)", animator and "Found" or "Missing", model.Name, aKind))
+	end
 	
 	return battleUnit
 end
@@ -162,6 +171,85 @@ local function calculateDistance(pos1: Vector3, pos2: Vector3): number
 	return (pos1 - pos2).Magnitude
 end
 
+-- Planar (XZ) distance helper to avoid Y offsets affecting range checks
+local function calculatePlanarDistance(pos1: Vector3, pos2: Vector3): number
+	local a = Vector3.new(pos1.X, 0, pos1.Z)
+	local b = Vector3.new(pos2.X, 0, pos2.Z)
+	return (a - b).Magnitude
+end
+
+-- Animator resolver: works with Humanoid or AnimationController
+local function resolveAnimator(model: Model): (Animator?, string)
+	if not model then return nil, "no-model" end
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		local animator = humanoid:FindFirstChildOfClass("Animator")
+		if not animator then
+			animator = Instance.new("Animator")
+			animator.Parent = humanoid
+			if ENABLE_ANIMATION_DEBUG then
+				print(string.format("[ANIM] Created Animator under Humanoid for model %s", model.Name))
+			end
+		end
+		return animator, "humanoid"
+	end
+	local animCtrl = model:FindFirstChildOfClass("AnimationController")
+	if animCtrl then
+		local animator = animCtrl:FindFirstChildOfClass("Animator")
+		if not animator then
+			animator = Instance.new("Animator")
+			animator.Parent = animCtrl
+			if ENABLE_ANIMATION_DEBUG then
+				print(string.format("[ANIM] Created Animator under AnimationController for model %s", model.Name))
+			end
+		end
+		return animator, "controller"
+	end
+	if ENABLE_ANIMATION_DEBUG then
+		warn(string.format("[ANIM] No Humanoid or AnimationController found on model %s", model.Name))
+	end
+	return nil, "none"
+end
+
+-- Utility to play an animation by id; returns track or nil
+local function playAnimation(model: Model, animationId: string, opts: { looped: boolean?, priority: Enum.AnimationPriority? }?): AnimationTrack?
+	if not model or not animationId or animationId == "" then return nil end
+	local animator, kind = resolveAnimator(model)
+	if not animator then return nil end
+	local anim = Instance.new("Animation")
+	anim.AnimationId = animationId
+	local ok, track = pcall(function()
+		return animator:LoadAnimation(anim)
+	end)
+	if not ok then
+		warn(string.format("[ANIM] Failed to load animation %s for %s (%s): %s", tostring(animationId), model.Name, kind, tostring(track)))
+		return nil
+	end
+	if opts and opts.looped ~= nil then
+		track.Looped = opts.looped
+	end
+	if opts and opts.priority then
+		track.Priority = opts.priority
+	end
+	track:Play()
+	if ENABLE_ANIMATION_DEBUG then
+		print(string.format("[ANIM] Playing %s animation on %s (id=%s looped=%s)", (opts and opts.looped) and "looped" or "one-shot", model.Name, tostring(animationId), tostring(opts and opts.looped)))
+	end
+	return track
+end
+
+-- Utility to stop any playing track on a model that matches a given animationId
+local function stopAnimationById(model: Model, animationId: string)
+	if not model or not animationId or animationId == "" then return end
+	local animator = select(1, resolveAnimator(model))
+	if not animator then return end
+	for _, t in ipairs(animator:GetPlayingAnimationTracks()) do
+		if t.Animation and t.Animation.AnimationId == animationId then
+			pcall(function() t:Stop() end)
+		end
+	end
+end
+
 -- Find the closest enemy unit to a given unit
 local function findClosestEnemy(unit: BattleUnit, enemyTeam: {BattleUnit}): BattleUnit?
 	local closestEnemy = nil
@@ -182,10 +270,26 @@ end
 
 -- Check if a unit is in attack range of its target
 local function isInAttackRange(unit: BattleUnit, target: BattleUnit): boolean
-	local distance = calculateDistance(unit.position, target.position)
+	-- Use planar distance to avoid vertical offsets influencing decision
+	local distance = calculatePlanarDistance(unit.position, target.position)
 	local attackRange = unit.unit.stats.range * BATTLE_CONSTANTS.HEX_SIZE + BATTLE_CONSTANTS.ATTACK_RANGE_BUFFER
 	local epsilon = 0.75
-	return distance <= (attackRange + epsilon)
+
+	if distance <= (attackRange + epsilon) then
+		return true
+	end
+
+	-- Extra tolerance for melee when standing on adjacent hexes that might be spaced slightly wider
+	if unit.unit.stats.range <= 1 then
+		if distance <= (BATTLE_CONSTANTS.HEX_SIZE * 1.25) then
+			if ENABLE_VERBOSE_ATTACK_DEBUG then
+				print(string.format("[RANGE] Melee adjacency tolerance applied (dist=%.2f, hex=%.2f)", distance, BATTLE_CONSTANTS.HEX_SIZE))
+			end
+			return true
+		end
+	end
+
+	return false
 end
 
 -- Check if a hex is occupied by any unit
@@ -403,6 +507,9 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 	
 	-- Check if the target hex is already occupied or reserved
 	if isHexOccupied(nextHex, unit.model) or isHexReserved(nextHex, unitId) then
+		if ENABLE_VERBOSE_ATTACK_DEBUG then
+			print(string.format("[MOVE] Next hex %s blocked (occupied=%s reserved=%s)", nextHex.Name, tostring(isHexOccupied(nextHex, unit.model)), tostring(isHexReserved(nextHex, unitId))))
+		end
 		-- Find a safer hex that's not occupied or reserved
 		local saferHex = nil
 		local closestDistance = math.huge
@@ -468,14 +575,16 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 	unit.lastMoveTime = tick() -- Update movement cooldown
 	unit.isMoving = true
 	
-	-- Play move animation for unit
-	local humanoid = unit.model:FindFirstChild("Humanoid")
+	-- Play move animation for unit (looped) using Animator API
 	local moveTrack = nil
-	if humanoid and unit.unit.moveAnimationId then
-		local anim = Instance.new("Animation")
-		anim.AnimationId = unit.unit.moveAnimationId
-		moveTrack = humanoid:LoadAnimation(anim)
-		moveTrack:Play()
+	if unit.unit.moveAnimationId then
+		-- Stop any stale move track first
+		stopAnimationById(unit.model, unit.unit.moveAnimationId)
+		moveTrack = playAnimation(unit.model, unit.unit.moveAnimationId, { looped = true, priority = Enum.AnimationPriority.Movement })
+		unit._moveTrack = moveTrack
+		if not moveTrack and ENABLE_ANIMATION_DEBUG then
+			warn(string.format("[ANIM] Move animation failed to play for %s (id=%s)", unit.unit.name, tostring(unit.unit.moveAnimationId)))
+		end
 	end
 
 	-- Compute yaw-only facing and tween the model's pivot using a CFrameValue
@@ -526,10 +635,18 @@ local function moveUnitTowardsTarget(unit: BattleUnit, target: BattleUnit, arena
 			end
 		end
 		releaseHex(nextHex)
-		if moveTrack then
-			moveTrack:Stop()
+		if unit._moveTrack then
+			-- Ensure we stop the looped move track when we arrive
+			pcall(function()
+				unit._moveTrack:Stop()
+			end)
+			unit._moveTrack = nil
+		elseif moveTrack then
+			pcall(function()
+				moveTrack:Stop()
+			end)
 		end
-        unit.isMoving = false
+		unit.isMoving = false
 	end)
 	tween:Play()
 	local curDist = (unit.position - target.position).Magnitude
@@ -660,23 +777,27 @@ local function attackTarget(unit: BattleUnit, target: BattleUnit)
 	print("DEBUG: Unit " .. unit.unit.name .. " initiating attack on " .. target.unit.name .. " (baseDamage=" .. damage .. ", armor=" .. armor .. ", postMitigation=" .. actualDamage .. ")")
 	
 	-- Face the target and play attack animation for attacker
-	local attackerHumanoid = unit.model:FindFirstChild("Humanoid")
 	-- Rotate attacker to face target (yaw-only)
 	local attackerPos = unit.model:GetPivot().Position
 	local targetPos = target.model:GetPivot().Position
 	local faceCFrame = CFrame.new(attackerPos, Vector3.new(targetPos.X, attackerPos.Y, targetPos.Z))
 	unit.model:PivotTo(faceCFrame)
-	if attackerHumanoid and unit.unit.attackAnimationId then
-		-- Stop move animation if running
-		for _, track in ipairs(attackerHumanoid:GetPlayingAnimationTracks()) do
-			if track.Animation and track.Animation.AnimationId == unit.unit.moveAnimationId then
-				track:Stop()
-			end
+	-- Stop any looped move track we own
+	if unit._moveTrack then
+		pcall(function()
+			unit._moveTrack:Stop()
+		end)
+		unit._moveTrack = nil
+	end
+	-- Also stop residual move animation by id in case it was started elsewhere
+	if unit.unit.moveAnimationId then
+		stopAnimationById(unit.model, unit.unit.moveAnimationId)
+	end
+	if unit.unit.attackAnimationId then
+		local track = playAnimation(unit.model, unit.unit.attackAnimationId, { looped = false, priority = Enum.AnimationPriority.Action })
+		if not track and ENABLE_ANIMATION_DEBUG then
+			warn(string.format("[ANIM] Attack animation failed to play for %s (id=%s)", unit.unit.name, tostring(unit.unit.attackAnimationId)))
 		end
-		local anim = Instance.new("Animation")
-		anim.AnimationId = unit.unit.attackAnimationId
-		local track = attackerHumanoid:LoadAnimation(anim)
-		track:Play()
 	end
     
 	local delayDamage = spawnProjectileIfNeeded(unit, target)
@@ -882,30 +1003,21 @@ end
 
 -- Stop all move animations for all units (call before reset)
 local function stopAllMoveAnimations(battleData)
-    for _, unit in ipairs(battleData.team1) do
-        if unit.model then
-            local humanoid = unit.model:FindFirstChild("Humanoid")
-            if humanoid and unit.unit and unit.unit.moveAnimationId then
-                for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
-                    if track.Animation and track.Animation.AnimationId == unit.unit.moveAnimationId then
-                        track:Stop()
-                    end
-                end
-            end
-        end
-    end
-    for _, unit in ipairs(battleData.team2) do
-        if unit.model then
-            local humanoid = unit.model:FindFirstChild("Humanoid")
-            if humanoid and unit.unit and unit.unit.moveAnimationId then
-                for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
-                    if track.Animation and track.Animation.AnimationId == unit.unit.moveAnimationId then
-                        track:Stop()
-                    end
-                end
-            end
-        end
-    end
+	local function stopForTeam(team)
+		for _, unit in ipairs(team) do
+			if unit and unit.model and unit.unit and unit.unit.moveAnimationId then
+				-- Try to stop via stored track first
+				if unit._moveTrack then
+					pcall(function() unit._moveTrack:Stop() end)
+					unit._moveTrack = nil
+				end
+				-- Also stop any matching tracks on the animator
+				stopAnimationById(unit.model, unit.unit.moveAnimationId)
+			end
+		end
+	end
+	stopForTeam(battleData.team1)
+	stopForTeam(battleData.team2)
 end
 
 -- Main battle loop
@@ -948,32 +1060,32 @@ local function runBattleLoop(battleData: BattleData)
 						end
 					end
 				end
-				print("[DEBUG] Team 1 Unit " .. unit.unit.name .. " Position: " .. tostring(unit.position))
+				--print("[DEBUG] Team 1 Unit " .. unit.unit.name .. " Position: " .. tostring(unit.position))
 				if not unit.target or not unit.target.isAlive then
 					unit.target = findClosestEnemy(unit, battleData.team2)
 					if unit.target then
-						print("DEBUG: Unit " .. unit.unit.name .. " found new target: " .. unit.target.unit.name .. " at position " .. tostring(unit.target.position))
+						--print("DEBUG: Unit " .. unit.unit.name .. " found new target: " .. unit.target.unit.name .. " at position " .. tostring(unit.target.position))
 					end
 				end
 				if unit.target then
 					local distance = calculateDistance(unit.position, unit.target.position)
 					local attackRange = unit.unit.stats.range * BATTLE_CONSTANTS.HEX_SIZE + BATTLE_CONSTANTS.ATTACK_RANGE_BUFFER
-					print("[DEBUG] Team 1 Unit " .. unit.unit.name .. " distance to target " .. unit.target.unit.name .. ": " .. distance .. ", attack range: " .. attackRange)
+					--print("[DEBUG] Team 1 Unit " .. unit.unit.name .. " distance to target " .. unit.target.unit.name .. ": " .. distance .. ", attack range: " .. attackRange)
 					if isInAttackRange(unit, unit.target) then
 						local timeSinceLastAttack = tick() - unit.lastAttackTime
 						local attackCooldown = (1 / unit.unit.stats.attackSpeed) / BATTLE_CONSTANTS.ATTACK_SPEED_MULTIPLIER
-						print("[DEBUG] Team 1 Unit " .. unit.unit.name .. " in range! Time since last attack: " .. timeSinceLastAttack .. ", cooldown: " .. attackCooldown)
+						--print("[DEBUG] Team 1 Unit " .. unit.unit.name .. " in range! Time since last attack: " .. timeSinceLastAttack .. ", cooldown: " .. attackCooldown)
 						if timeSinceLastAttack >= attackCooldown then
-							print("[DEBUG] Team 1 Unit " .. unit.unit.name .. " attacking!")
+							--print("[DEBUG] Team 1 Unit " .. unit.unit.name .. " attacking!")
 							attackTarget(unit, unit.target)
 							unit.lastAttackTime = tick() -- Update attack time
 						end
 					else
-						print("[DEBUG] Team 1 Unit " .. unit.unit.name .. " not in attack range of " .. unit.target.unit.name)
+						--print("[DEBUG] Team 1 Unit " .. unit.unit.name .. " not in attack range of " .. unit.target.unit.name)
 						moveUnitTowardsTarget(unit, unit.target, battleData.arena)
 					end
 				else
-					print("DEBUG: Unit " .. unit.unit.name .. " has no target")
+					--print("DEBUG: Unit " .. unit.unit.name .. " has no target")
 				end
 			end
 		end
@@ -985,32 +1097,32 @@ local function runBattleLoop(battleData: BattleData)
 				if unit.model then
 					unit.position = unit.model:GetPivot().Position
 				end
-				print("[DEBUG] Team 2 Unit " .. unit.unit.name .. " Position: " .. tostring(unit.position))
+				--print("[DEBUG] Team 2 Unit " .. unit.unit.name .. " Position: " .. tostring(unit.position))
 				if not unit.target or not unit.target.isAlive then
 					unit.target = findClosestEnemy(unit, battleData.team1)
 					if unit.target then
-						print("DEBUG: Enemy unit " .. unit.unit.name .. " found new target: " .. unit.target.unit.name .. " at position " .. tostring(unit.target.position))
+						--print("DEBUG: Enemy unit " .. unit.unit.name .. " found new target: " .. unit.target.unit.name .. " at position " .. tostring(unit.target.position))
 					end
 				end
 				if unit.target then
 					local distance = calculateDistance(unit.position, unit.target.position)
 					local attackRange = unit.unit.stats.range * BATTLE_CONSTANTS.HEX_SIZE + BATTLE_CONSTANTS.ATTACK_RANGE_BUFFER
-					print("[DEBUG] Team 2 Unit " .. unit.unit.name .. " distance to target " .. unit.target.unit.name .. ": " .. distance .. ", attack range: " .. attackRange)
+					--print("[DEBUG] Team 2 Unit " .. unit.unit.name .. " distance to target " .. unit.target.unit.name .. ": " .. distance .. ", attack range: " .. attackRange)
 					if isInAttackRange(unit, unit.target) then
 						local timeSinceLastAttack = tick() - unit.lastAttackTime
 						local attackCooldown = (1 / unit.unit.stats.attackSpeed) / BATTLE_CONSTANTS.ATTACK_SPEED_MULTIPLIER
-						print("[DEBUG] Team 2 Unit " .. unit.unit.name .. " in range! Time since last attack: " .. timeSinceLastAttack .. ", cooldown: " .. attackCooldown)
+						--print("[DEBUG] Team 2 Unit " .. unit.unit.name .. " in range! Time since last attack: " .. timeSinceLastAttack .. ", cooldown: " .. attackCooldown)
 						if timeSinceLastAttack >= attackCooldown then
-							print("[DEBUG] Team 2 Unit " .. unit.unit.name .. " attacking!")
+							--print("[DEBUG] Team 2 Unit " .. unit.unit.name .. " attacking!")
 							attackTarget(unit, unit.target)
 							unit.lastAttackTime = tick() -- Update attack time
 						end
 					else
-						print("[DEBUG] Team 2 Unit " .. unit.unit.name .. " not in attack range of " .. unit.target.unit.name)
+						--print("[DEBUG] Team 2 Unit " .. unit.unit.name .. " not in attack range of " .. unit.target.unit.name)
 						moveUnitTowardsTarget(unit, unit.target, battleData.arena)
 					end
 				else
-					print("DEBUG: Enemy unit " .. unit.unit.name .. " has no target")
+					--print("DEBUG: Enemy unit " .. unit.unit.name .. " has no target")
 				end
 			end
 		end
@@ -1020,16 +1132,16 @@ local function runBattleLoop(battleData: BattleData)
 		local team2Defeated = isTeamDefeated(battleData.team2)
 		
 		if team1Defeated or team2Defeated then
-			print(string.format("[DEBUG] Battle end condition reached (team1Defeated=%s, team2Defeated=%s) p1=%s p2=%s", tostring(team1Defeated), tostring(team2Defeated), tostring(battleData.player1Id), tostring(battleData.player2Id)))
+			--print(string.format("[DEBUG] Battle end condition reached (team1Defeated=%s, team2Defeated=%s) p1=%s p2=%s", tostring(team1Defeated), tostring(team2Defeated), tostring(battleData.player1Id), tostring(battleData.player2Id)))
 			local winner: number? = nil
 			if team1Defeated and not team2Defeated then
 				winner = battleData.player2Id
-				print("[DEBUG] Team 1 defeated; declaring Player2 winner: " .. tostring(winner))
+				--print("[DEBUG] Team 1 defeated; declaring Player2 winner: " .. tostring(winner))
 			elseif team2Defeated and not team1Defeated then
 				winner = battleData.player1Id
-				print("[DEBUG] Team 2 defeated; declaring Player1 winner: " .. tostring(winner))
+				--print("[DEBUG] Team 2 defeated; declaring Player1 winner: " .. tostring(winner))
 			else
-				print("[DEBUG] Both teams defeated simultaneously -> draw")
+				--print("[DEBUG] Both teams defeated simultaneously -> draw")
 			end
 
 			-- Sanity check: ensure winner is one of the two players else treat as draw
