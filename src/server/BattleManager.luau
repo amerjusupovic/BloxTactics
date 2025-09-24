@@ -891,7 +891,7 @@ local function attackTarget(unit: BattleUnit, target: BattleUnit)
 			hl.Name = "BT_DamageHighlight"
 			hl.Adornee = target.model
 			-- Subtle, readable colors; avoid red per request
-			hl.FillColor = Color3.fromRGB(255, 0, 0) -- yellow
+			hl.FillColor = Color3.fromRGB(255, 0, 0) -- red
 			hl.OutlineColor = Color3.fromRGB(255, 255, 255)
 			hl.FillTransparency = 0.7
 			hl.OutlineTransparency = 0
