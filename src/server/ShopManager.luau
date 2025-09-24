@@ -313,11 +313,21 @@ function ShopManager.sendBoardUpdate(userId: number)
 	if not playerData then return end
 	
 	local updateBoardEvent = game.ReplicatedStorage.RemoteEvents:WaitForChild("UpdateBoard")
+	local updateTraitsEvent = game.ReplicatedStorage.RemoteEvents:FindFirstChild("UpdateTraits")
 	if updateBoardEvent then
 		updateBoardEvent:FireClient(player, playerData.boardState)
 		print("Sent board update to client for user: " .. userId)
 	else
 		warn("UpdateBoard RemoteEvent not found!")
+	end
+
+	-- Send trait info (server computes simple counts)
+	if updateTraitsEvent then
+		local TraitSystem = require(game.ReplicatedStorage.Shared.TraitSystem)
+		local traitData = TraitSystem.computeBoardTraits(playerData.boardState)
+		updateTraitsEvent:FireClient(player, traitData)
+	else
+		warn("UpdateTraits RemoteEvent not found!")
 	end
 end
 

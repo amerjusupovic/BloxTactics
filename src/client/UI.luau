@@ -26,6 +26,7 @@ local sellUnitFrame = nil
 local editArenaFrame = nil
 local arenaSelectionFrames = {}
 local currentArenaCheckmark = nil
+local traitBarFrame = nil -- container for trait icons
 
 -- UI state variables
 local shopVisible = false
@@ -75,6 +76,7 @@ function UI.createMainUI()
 	statsFrame = mainFrame:FindFirstChild("StatsFrame")
 	sellUnitFrame = mainFrame:FindFirstChild("SellUnitFrame")
 	editArenaFrame = mainFrame:FindFirstChild("EditArenaFrame")
+	traitBarFrame = mainFrame:FindFirstChild("TraitBarFrame") -- Expected container (assumed existing per instructions)
 	
 	print("UI frames found:")
 	print("  shopFrame:", shopFrame and "YES" or "NO")
@@ -176,6 +178,73 @@ function UI.createMainUI()
 	-- Ensure correct initial visibility (hidden until a selection while board is open)
 	updateSellUnitFrameVisibility()
 	print("UI created successfully from existing ReplicatedStorage elements!")
+end
+
+--[[
+	Update trait bar display.
+	traitData shape (server): { TraitId = { count = number, active = boolean, units = {Unit,...} }, ... }
+	Assumptions about UI:
+	- There is a Frame named TraitBarFrame under MainFrame (assigned to traitBarFrame).
+	- Inside it, there may be pre-created Frames for each trait with Name == traitId (e.g., Medieval, Mystic...)
+	  Each trait frame can optionally contain:
+	    * An ImageLabel named Icon (we'll tint it)
+	    * A TextLabel named Count (we'll show progress like "1/2" or "2/2")
+	    * A TextLabel named Name (shown when active or always)
+	If a trait frame doesn't exist, we'll create a simple placeholder Frame so UI doesn't break.
+]]
+function UI.updateTraitsDisplay(traitData)
+	if not mainGui then return end
+	if not traitBarFrame then
+		-- Attempt to find (maybe created after UI init)
+		local mainFrame = mainGui:FindFirstChild("MainFrame")
+		if mainFrame then
+			traitBarFrame = mainFrame:FindFirstChild("TraitBarFrame")
+		end
+	end
+	if not traitBarFrame then
+		warn("TraitBarFrame not found; cannot update trait UI")
+		return
+	end
+
+	local constants = _Constants
+	local traitDefs = constants.TRAITS or {}
+
+	-- Ensure frames exist for each defined trait
+	for traitId, def in pairs(traitDefs) do
+		local frame = traitBarFrame:FindFirstChild(traitId)
+		if not frame then
+			warn("Trait frame for", traitId, "not found.")
+		end
+	end
+
+	for traitId, def in pairs(traitDefs) do
+		local frame = traitBarFrame:FindFirstChild(traitId)
+		if frame then
+			local icon = frame:FindFirstChild("Icon")
+			local countLabel = frame:FindFirstChild("Count")
+			local nameLabel = frame:FindFirstChild("Name")
+			local info = traitData and traitData[traitId]
+			local count = info and info.count or 0
+			local active = info and info.active or false
+			-- Progress text
+			if countLabel and countLabel:IsA("TextLabel") then
+				countLabel.Text = string.format("%d/%d", count, def.requirement)
+			end
+			-- Visual state: active = bright color, inactive = dim
+			local activeColor = Color3.fromRGB(255, 215, 0)
+			local inactiveColor = Color3.fromRGB(70,70,70)
+			frame.BackgroundColor3 = active and activeColor or Color3.fromRGB(30,30,30)
+			if icon and icon:IsA("ImageLabel") then
+				icon.ImageTransparency = active and 0 or 0.5
+				icon.ImageColor3 = active and Color3.fromRGB(255,255,255) or inactiveColor
+			end
+			if nameLabel and nameLabel:IsA("TextLabel") then
+				nameLabel.Visible = active
+			end
+			-- Tooltip via Hover (simple: set attribute; advanced system could be added later)
+			frame:SetAttribute("Description", def.description)
+		end
+	end
 end
 
 -- Request arena switch

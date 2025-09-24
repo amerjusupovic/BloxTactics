@@ -11,6 +11,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Constants = require(ReplicatedStorage.Shared.Constants)
 local DataStructures = require(ReplicatedStorage.Shared.DataStructures)
 local UnitDatabase = require(ReplicatedStorage.Shared.UnitDatabase)
+local TraitSystem = require(ReplicatedStorage.Shared.TraitSystem)
 local RemoteEvents = require(script.Parent.RemoteEvents)
 
 local BattleManager = {}
@@ -808,7 +809,17 @@ local function spawnProjectileIfNeeded(unit: BattleUnit, target: BattleUnit): bo
 	return true
 end
 
-local function attackTarget(unit: BattleUnit, target: BattleUnit)
+-- Helper to compute current attack speed (includes Ranger stacks)
+local function getEffectiveAttackSpeed(bu)
+	local base = bu.unit.stats.attackSpeed or 1
+	if bu.rangerStacks and bu.rangerStacks > 0 then
+		local bonus = math.min(bu.rangerStacks, 10) * 0.04 -- 4% per stack, cap 10
+		return base * (1 + bonus)
+	end
+	return base
+end
+
+local function attackTarget(battleData: BattleData, unit: BattleUnit, target: BattleUnit)
 	if not unit.model or not target.model then
 		print("DEBUG: attackTarget failed - missing models")
 		return
@@ -851,8 +862,35 @@ local function attackTarget(unit: BattleUnit, target: BattleUnit)
 		if not target.model then return end
 		local humanoid = target.model:FindFirstChild("Humanoid")
 		if humanoid and humanoid.Health > 0 then
-			print("DEBUG: Applying damage " .. actualDamage .. " to target " .. target.unit.name)
-			humanoid:TakeDamage(actualDamage)
+			-- Juggernaut damage reduction
+			local dr = target.damageReduction or 0
+			local mitigated = math.max(1, math.floor(actualDamage * (1 - dr)))
+
+			-- Shield application (from Medieval)
+			local remainingDamage = mitigated
+			if target.shield and target.shield > 0 then
+				local absorbed = math.min(target.shield, remainingDamage)
+				target.shield -= absorbed
+				remainingDamage -= absorbed
+				if target.model then target.model:SetAttribute("Shield", target.shield) end
+			end
+
+			-- Mystic bonus damage (3% target max health true magic damage) if active for attacker team
+			local function teamHasActive(trait)
+				return unit._teamActiveTraits and unit._teamActiveTraits[trait] == true
+			end
+			local bonusMagic = 0
+			if teamHasActive("Mystic") then
+				bonusMagic = math.max(1, math.floor(0.03 * (target.maxHealth or humanoid.MaxHealth)))
+			end
+
+			print("DEBUG: Applying damage " .. remainingDamage .. " (+magic " .. bonusMagic .. ") to target " .. target.unit.name)
+			if remainingDamage > 0 then
+				humanoid:TakeDamage(remainingDamage)
+			end
+			if bonusMagic > 0 and humanoid.Health > 0 then
+				humanoid:TakeDamage(bonusMagic)
+			end
 			target.health = humanoid.Health
 			print("DEBUG: Target health after damage: " .. target.health)
 			if humanoid.Health <= 0 then
@@ -910,7 +948,47 @@ local function attackTarget(unit: BattleUnit, target: BattleUnit)
 	-- Update last attack time
 	unit.lastAttackTime = tick()
 	
-	print("Unit " .. unit.unit.name .. " completed attack on " .. target.unit.name .. " for " .. actualDamage .. " damage")
+	-- Ranger stacking (after successful attack application)
+	if unit.unit.traits and table.find(unit.unit.traits, "Ranger") and unit._teamActiveTraits and unit._teamActiveTraits["Ranger"] then
+		unit.rangerStacks = (unit.rangerStacks or 0) + 1
+		if unit.rangerStacks > 10 then unit.rangerStacks = 10 end
+		if unit.model then unit.model:SetAttribute("RangerStacks", unit.rangerStacks) end
+	end
+
+	-- Artillerist splash (50% splash in 1 hex radius) if projectile unit and trait active
+	if unit.unit.projectileName and unit.unit.traits and table.find(unit.unit.traits, "Artillerist") and unit._teamActiveTraits and unit._teamActiveTraits["Artillerist"] then
+		-- Determine enemy team list
+		local enemyTeam = (unit.team == 1) and battleData.team2 or battleData.team1
+		local splashRadius = BATTLE_CONSTANTS.HEX_SIZE -- 1 hex
+		local splashDamage = math.max(1, math.floor(actualDamage * 0.5))
+		for _, e in ipairs(enemyTeam) do
+			if e.isAlive and e ~= target then
+				local dist = (e.position - target.position).Magnitude
+				if dist <= splashRadius then
+					local eh = e.model and e.model:FindFirstChild("Humanoid")
+					if eh and eh.Health > 0 then
+						-- Apply juggernaut DR + shield to splash recipients too
+						local dr2 = e.damageReduction or 0
+						local dmg2 = math.max(1, math.floor(splashDamage * (1 - dr2)))
+						local remain2 = dmg2
+						if e.shield and e.shield > 0 then
+							local absorbed2 = math.min(e.shield, remain2)
+							e.shield -= absorbed2
+							remain2 -= absorbed2
+							if e.model then e.model:SetAttribute("Shield", e.shield) end
+						end
+						if remain2 > 0 then eh:TakeDamage(remain2) end
+						if eh.Health <= 0 then
+							e.isAlive = false
+							e.model:SetAttribute("IsAlive", false)
+						end
+					end
+				end
+			end
+		end
+	end
+
+	print("Unit " .. unit.unit.name .. " completed attack on " .. target.unit.name .. " for " .. actualDamage .. " damage (pre-mitigation)")
 end
 
 -- Check if a team is defeated (all units dead)
@@ -1131,11 +1209,11 @@ local function runBattleLoop(battleData: BattleData)
 					--print("[DEBUG] Team 1 Unit " .. unit.unit.name .. " distance to target " .. unit.target.unit.name .. ": " .. distance .. ", attack range: " .. attackRange)
 					if isInAttackRange(unit, unit.target) then
 						local timeSinceLastAttack = tick() - unit.lastAttackTime
-						local attackCooldown = (1 / unit.unit.stats.attackSpeed) / BATTLE_CONSTANTS.ATTACK_SPEED_MULTIPLIER
+						local attackCooldown = (1 / getEffectiveAttackSpeed(unit)) / BATTLE_CONSTANTS.ATTACK_SPEED_MULTIPLIER
 						--print("[DEBUG] Team 1 Unit " .. unit.unit.name .. " in range! Time since last attack: " .. timeSinceLastAttack .. ", cooldown: " .. attackCooldown)
 						if timeSinceLastAttack >= attackCooldown then
 							--print("[DEBUG] Team 1 Unit " .. unit.unit.name .. " attacking!")
-							attackTarget(unit, unit.target)
+							attackTarget(battleData, unit, unit.target)
 							unit.lastAttackTime = tick() -- Update attack time
 						end
 					else
@@ -1168,11 +1246,11 @@ local function runBattleLoop(battleData: BattleData)
 					--print("[DEBUG] Team 2 Unit " .. unit.unit.name .. " distance to target " .. unit.target.unit.name .. ": " .. distance .. ", attack range: " .. attackRange)
 					if isInAttackRange(unit, unit.target) then
 						local timeSinceLastAttack = tick() - unit.lastAttackTime
-						local attackCooldown = (1 / unit.unit.stats.attackSpeed) / BATTLE_CONSTANTS.ATTACK_SPEED_MULTIPLIER
+						local attackCooldown = (1 / getEffectiveAttackSpeed(unit)) / BATTLE_CONSTANTS.ATTACK_SPEED_MULTIPLIER
 						--print("[DEBUG] Team 2 Unit " .. unit.unit.name .. " in range! Time since last attack: " .. timeSinceLastAttack .. ", cooldown: " .. attackCooldown)
 						if timeSinceLastAttack >= attackCooldown then
 							--print("[DEBUG] Team 2 Unit " .. unit.unit.name .. " attacking!")
-							attackTarget(unit, unit.target)
+							attackTarget(battleData, unit, unit.target)
 							unit.lastAttackTime = tick() -- Update attack time
 						end
 					else
@@ -1275,6 +1353,30 @@ function BattleManager.startBattle(challengeId: string, player1Id: number, playe
 		end
 	end
 	
+	-- Compute and apply trait bonuses for both teams before battle begins
+	local team1TraitContext = TraitSystem.applyPreBattleBonuses(battleData.team1)
+	local team2TraitContext = TraitSystem.applyPreBattleBonuses(battleData.team2)
+	-- Store active trait flags on each battle unit for fast lookup during attacks
+	local t1Active = {}
+	for trait, def in pairs(Constants.TRAITS) do
+		local c = 0
+		for _, bu in ipairs(battleData.team1) do
+			if bu.unit.traits and table.find(bu.unit.traits, trait) then c += 1 end
+		end
+		if c >= def.requirement then t1Active[trait] = true end
+	end
+	for _, bu in ipairs(battleData.team1) do bu._teamActiveTraits = t1Active end
+
+	local t2Active = {}
+	for trait, def in pairs(Constants.TRAITS) do
+		local c = 0
+		for _, bu in ipairs(battleData.team2) do
+			if bu.unit.traits and table.find(bu.unit.traits, trait) then c += 1 end
+		end
+		if c >= def.requirement then t2Active[trait] = true end
+	end
+	for _, bu in ipairs(battleData.team2) do bu._teamActiveTraits = t2Active end
+
 	-- Start the battle with a short delay to allow teleports to settle
 	wait(2)
 	battleData.status = "in_progress"

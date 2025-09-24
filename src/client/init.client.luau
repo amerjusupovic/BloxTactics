@@ -52,6 +52,16 @@ local function setupRemoteEventHandlers()
 	updateBoardEvent.OnClientEvent:Connect(function(boardState)
 		UI.updateBoardDisplay(boardState)
 	end)
+
+	-- Handle trait updates
+	local updateTraitsEvent = remoteEventsFolder:FindFirstChild(Constants.REMOTE_EVENT_NAMES.UPDATE_TRAITS)
+	if updateTraitsEvent then
+		updateTraitsEvent.OnClientEvent:Connect(function(traitData)
+			UI.updateTraitsDisplay(traitData)
+		end)
+	else
+		warn("UpdateTraits RemoteEvent missing; trait UI will not update.")
+	end
 	
 	-- Handle bench updates
 	local updateBenchEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.UPDATE_BENCH)

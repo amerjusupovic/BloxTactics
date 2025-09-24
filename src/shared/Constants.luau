@@ -95,11 +95,51 @@ Constants.REMOTE_EVENT_NAMES = {
 	UPDATE_PLAYER_DATA = "UpdatePlayerData",
 	UPDATE_SHOP = "UpdateShop",
 	UPDATE_BENCH = "UpdateBench",
+	UPDATE_TRAITS = "UpdateTraits", -- New: send active trait info to client
 	SHOW_NOTIFICATION = "ShowNotification",
 	RESET_PLAYER_DATA = "ResetPlayerData",
 	SHOW_EDIT_ARENA_FRAME = "ShowEditArenaFrame",
 	HIDE_EDIT_ARENA_FRAME = "HideEditArenaFrame",
 	SWITCH_ARENA = "SwitchArena" -- Client requests switching arena theme
+}
+
+-- Trait definitions (shared for UI + server logic)
+Constants.TRAITS = {
+	Medieval = {
+		id = "Medieval",
+		requirement = 2,
+		name = "Medieval",
+		description = "Castle Wall: Adjacent allies to Medieval units gain a shield equal to 20% of their max health.",
+		icon = "rbxassetid://0" -- placeholder icon id
+	},
+	Mystic = {
+		id = "Mystic",
+		requirement = 2,
+		name = "Mystic",
+		description = "Ethereal Strikes: Allies' attacks deal 3% of target max health as bonus magic damage.",
+		icon = "rbxassetid://0"
+	},
+	Artillerist = {
+		id = "Artillerist",
+		requirement = 2,
+		name = "Artillerist",
+		description = "Bombs Away!: Artillerist projectiles deal 50% splash damage in 1 hex radius.",
+		icon = "rbxassetid://0"
+	},
+	Juggernaut = {
+		id = "Juggernaut",
+		requirement = 2,
+		name = "Juggernaut",
+		description = "Durable: Juggernauts take 15% reduced damage.",
+		icon = "rbxassetid://0"
+	},
+	Ranger = {
+		id = "Ranger",
+		requirement = 2,
+		name = "Ranger",
+		description = "Hail of Arrows: Attacks grant stacking 4% attack speed (max 40%).",
+		icon = "rbxassetid://0"
+	}
 }
 
 return Constants

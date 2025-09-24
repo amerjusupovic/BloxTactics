@@ -164,26 +164,24 @@ function UnitTiering.getStarIndicator(boardState: BoardState, benchState: BenchS
 	local tier1Count = UnitTiering.countUnitsByTypeAndTier(boardState, benchState, unitId, 1)
 	local tier2Count = UnitTiering.countUnitsByTypeAndTier(boardState, benchState, unitId, 2)
 	local tier3Count = UnitTiering.countUnitsByTypeAndTier(boardState, benchState, unitId, 3)
-	
-	-- Calculate total tier 1 equivalent units
-	-- Each tier 2 unit = 3 tier 1 units
-	-- Each tier 3 unit = 9 tier 1 units
-	local totalTier1Equivalents = tier1Count + (tier2Count * 3) + (tier3Count * 9)
-	
-	-- Add the unit being purchased (assumed to be tier 1)
-	totalTier1Equivalents = totalTier1Equivalents + 1
-	
-	-- Check if we can create tier 3 (need exactly 9 tier 1 equivalents)
-	if tier3Count == 0 and totalTier1Equivalents >= 9 then
-		return "gold" -- 3 gold stars for tier 3
+
+	-- Convert to tier 1 equivalents (tier2 = 3, tier3 = 9) and include prospective purchase (+1 tier1)
+	local totalEquivalents = tier1Count + (tier2Count * 3) + (tier3Count * 9) + 1
+
+	-- Ignore already completed full tier3 sets (multiples of 9) so stars keep cycling
+	local progress = totalEquivalents % 9
+
+	-- If progress is 0, we've just completed another full set toward a tier3
+	if progress == 0 then
+		return "gold"
 	end
-	
-	-- Check if we can create tier 2 (need exactly 3 tier 1 equivalents)
-	if totalTier1Equivalents == 3 or totalTier1Equivalents == 6 then
-		return "silver" -- 2 silver stars for tier 2
+
+	-- Show silver at 1/3 and 2/3 of the way (3 or 6 equivalents into the current cycle)
+	if progress == 3 or progress == 6 then
+		return "silver"
 	end
-	
-	return "none" -- No stars
+
+	return "none"
 end
 
 -- Function to find units to combine for tier up
