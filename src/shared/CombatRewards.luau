@@ -122,7 +122,7 @@ function CombatRewards.getRewardBreakdown(winnerLevel: number, loserLevel: numbe
 	if levelDifference > 0 then
 		levelMultiplier = LEVEL_DIFFERENCE_MULTIPLIERS[math.min(levelDifference, 5)] or 2.0
 	elseif levelDifference < 0 then
-		levelMultiplier = math.max(0.5, 1.0 + (levelDifference * 0.1))
+		levelMultiplier = math.max(0.5, 1.0 + (levelDifference * 0.2))
 	end
 	
 	local finalExperience = CombatRewards.calculateExperienceReward(winnerLevel, loserLevel, winnerStreak)

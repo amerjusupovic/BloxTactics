@@ -827,7 +827,8 @@ local function attackTarget(battleData: BattleData, unit: BattleUnit, target: Ba
 	-- Calculate damage data upfront
 	local damage = unit.unit.stats.attack
 	local armor = target.unit.stats.armor
-	local actualDamage = math.max(1, damage - math.sqrt(armor))
+	-- Calculate armor damage reduction (will use magic resist in future for abilities/ magic damage) TODO
+	local actualDamage = math.max(1, damage - (damage * (armor / (100 + armor))))
 	print("DEBUG: Unit " .. unit.unit.name .. " initiating attack on " .. target.unit.name .. " (baseDamage=" .. damage .. ", armor=" .. armor .. ", postMitigation=" .. actualDamage .. ")")
 	
 	-- Face the target and play attack animation for attacker
