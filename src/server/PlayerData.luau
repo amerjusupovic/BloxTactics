@@ -142,6 +142,10 @@ function PlayerDataManager.serializePlayerData(playerData: PlayerData): {[string
 		currentUnits = playerData.boardState.currentUnits
 	}
 	for position, unit in pairs(playerData.boardState.grid) do
+		-- Skip ephemeral reinforcement units (e.g., Tank)
+		if unit.id == "tank" then
+			continue
+		end
 		-- Convert Vector2 to string for storage
 		local posKey = tostring(position.X) .. "," .. tostring(position.Y)
 		serialized.boardState.grid[posKey] = {
@@ -162,6 +166,10 @@ function PlayerDataManager.serializePlayerData(playerData: PlayerData): {[string
 		currentCapacity = playerData.benchState.currentCapacity
 	}
 	for unitId, unit in pairs(playerData.benchState.units) do
+		-- Skip ephemeral reinforcement units just in case
+		if unit.id == "tank" then
+			continue
+		end
 		serialized.benchState.units[unitId] = {
 			id = unit.id,
 			name = unit.name,

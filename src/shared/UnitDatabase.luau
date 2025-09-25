@@ -20,8 +20,8 @@ local BASE_UNITS = {
 		baseStats = {
 			health = 60,
 			attack = 15,
-			armor = 5,
-			magicResist = 5,
+			armor = 10,
+			magicResist = 10,
 			attackSpeed = 1.2,
 			range = 1
 		},
@@ -37,8 +37,8 @@ local BASE_UNITS = {
 		baseStats = {
 			health = 40,
 			attack = 20,
-			armor = 3,
-			magicResist = 3,
+			armor = 5,
+			magicResist = 5,
 			attackSpeed = 1.5,
 			range = 4
 		},
@@ -65,13 +65,13 @@ local BASE_UNITS = {
 		id = "paladin",
 		name = "Paladin",
 		cost = 4,
-		imageAssetId = "rbxassetid://79467990236834", -- still tank image
+		imageAssetId = "rbxassetid://117300597154062", -- Paladin image
 		traits = {"Mystic", "Juggernaut"},
 		baseStats = {
 			health = 150,
 			attack = 20,
-			armor = 25,
-			magicResist = 15,
+			armor = 40,
+			magicResist = 40,
 			attackSpeed = 0.8,
 			range = 1
 		},
@@ -93,6 +93,42 @@ local BASE_UNITS = {
 			range = 5
 		},
 		abilities = {}
+	},
+	{
+		id = "rifleman",
+		name = "Rifleman",
+		cost = 6,
+		imageAssetId = "rbxassetid://83872594832081", -- Rifleman image
+		projectileName = "Bullet",
+		traits = {"Military", "Ranger"},
+		baseStats = {
+			health = 110,
+			attack = 45,
+			armor = 15,
+			magicResist = 10,
+			attackSpeed = 2.0,
+			range = 5
+		},
+		abilities = {}
+	},
+	-- Not buyable; reinforcement unit spawned by Military trait
+	{
+		id = "tank",
+		name = "Tank",
+		cost = 0, -- not available in shop
+		imageAssetId = "rbxassetid://116071720374271", -- Tank image
+		projectileName = "Bomb",
+		traits = {"Military"},
+		baseStats = {
+			health = 200,
+			attack = 50,
+			armor = 40,
+			magicResist = 20,
+			attackSpeed = 0.5,
+			range = 4
+		},
+		abilities = {},
+		isSummonOnly = true
 	}
 }
 
@@ -173,7 +209,8 @@ function UnitDatabase.createUnit(id: string, tier: number): Unit?
 		projectileName = baseUnit.projectileName,
 		traits = baseUnit.traits,
 		attackAnimationId = anims.Attack,
-		moveAnimationId = anims.Move
+		moveAnimationId = anims.Move,
+		isSummonOnly = baseUnit.isSummonOnly
 	}
 end
 

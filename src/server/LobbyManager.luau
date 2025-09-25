@@ -427,6 +427,11 @@ function LobbyManager.initializePlayerInLobby(playerId: number, player: Player, 
 	local updateBoardEvent = game.ReplicatedStorage.RemoteEvents:WaitForChild("UpdateBoard")
 	local updateBenchEvent = game.ReplicatedStorage.RemoteEvents:WaitForChild("UpdateBench")
 	if updateBoardEvent then
+		-- Ensure Military reinforcement state before sending initial board
+		local ShopManager = require(script.Parent.ShopManager)
+		pcall(function()
+			ShopManager.ensureMilitaryReinforcement(playerId, false)
+		end)
 		updateBoardEvent:FireClient(player, playerData.boardState)
 	end
 	if updateBenchEvent then

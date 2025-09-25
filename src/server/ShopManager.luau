@@ -311,6 +311,14 @@ function ShopManager.sendBoardUpdate(userId: number)
 	
 	local playerData = PlayerDataManager.getPlayerData(userId)
 	if not playerData then return end
+
+	-- Ensure Military reinforcement (Tank) presence/absence before broadcasting state
+	local ok, err = pcall(function()
+		ShopManager.ensureMilitaryReinforcement(userId)
+	end)
+	if not ok then
+		warn("ensureMilitaryReinforcement failed: " .. tostring(err))
+	end
 	
 	local updateBoardEvent = game.ReplicatedStorage.RemoteEvents:WaitForChild("UpdateBoard")
 	local updateTraitsEvent = game.ReplicatedStorage.RemoteEvents:FindFirstChild("UpdateTraits")
@@ -328,6 +336,89 @@ function ShopManager.sendBoardUpdate(userId: number)
 		updateTraitsEvent:FireClient(player, traitData)
 	else
 		warn("UpdateTraits RemoteEvent not found!")
+	end
+end
+
+-- Ensure the Military reinforcement (Tank) is spawned when Military is active (>=2 Military units excluding Tank),
+-- and removed when inactive. Does not persist to datastore; purely gameplay state.
+function ShopManager.ensureMilitaryReinforcement(userId: number, spawnModels: boolean?)
+	local playerData = PlayerDataManager.getPlayerData(userId)
+	if not playerData or not playerData.boardState or not playerData.boardState.grid then return end
+
+	local boardState = playerData.boardState
+	local militaryCount = 0
+	local countedIds: {[string]: boolean} = {}
+	local tankPos: Vector2? = nil
+
+	-- Scan board to count Military units (excluding Tank) and locate Tank if present
+	for pos, unit in pairs(boardState.grid) do
+		if unit then
+			if unit.id == "tank" then
+				-- remember tank position
+				if typeof(pos) == "Vector2" then
+					tankPos = pos
+				else
+					-- try to parse from attributes if needed
+					if unit.position and typeof(unit.position) == "Vector2" then
+						tankPos = unit.position
+					end
+				end
+			else
+				-- Count unique base unit ids contributing to Military (exclude summon-only)
+				if not unit.isSummonOnly then
+					local traits = unit.traits
+					if (not traits) or (#traits == 0) then
+						local base = UnitDatabase.getUnitById(unit.id)
+						traits = base and base.traits or nil
+					end
+					if traits and table.find(traits, "Military") then
+						local uid = unit.id
+						if not countedIds[uid] then
+							countedIds[uid] = true
+							militaryCount += 1
+						end
+					end
+				end
+			end
+		end
+	end
+
+	local hasActive = (militaryCount >= (Constants.TRAITS.Military and Constants.TRAITS.Military.requirement or 2))
+
+	if hasActive then
+		-- Need a Tank present; spawn if missing and there's space
+		if not tankPos then
+			local available = Board.getAvailablePositions(boardState)
+			local first = available and available[1]
+			if first then
+				local tankUnit = UnitDatabase.createUnit("tank", 1)
+				if tankUnit then
+					local placed = Board.placeUnit(boardState, tankUnit, first, { bypassCapacity = true })
+					if placed then
+							-- Optionally spawn physical Tank model
+							if spawnModels ~= false then
+								UnitSpawner.spawnUnitOnBoard(userId, tankUnit, first)
+							end
+							print("[Military] Spawned Tank at", first)
+					else
+						print("[Military] Failed to place Tank at", first)
+					end
+				end
+			else
+				print("[Military] No available positions to spawn Tank")
+			end
+		end
+	else
+		-- Should not have a Tank; remove if present
+		if tankPos then
+			local removed = Board.removeUnit(boardState, tankPos)
+			if removed then
+				if spawnModels ~= false then
+					UnitSpawner.removeUnitFromBoard(userId, tankPos)
+				end
+				print("[Military] Removed Tank from", tankPos)
+			end
+		end
 	end
 end
 
@@ -618,6 +709,12 @@ function ShopManager.handleBoardToBenchMove(userId: number, fromPosition: Vector
 		ShopManager.sendNotification(userId, "No unit at board position!", 3)
 		return false
 	end
+
+	-- Prevent moving Tank reinforcement to bench
+	if boardUnit.id == "tank" then
+		ShopManager.sendNotification(userId, "Reinforcements can't be moved to the bench.", 3)
+		return false
+	end
 	
 	-- Check if bench slot is occupied
 	local benchUnit = Bench.getUnitAtSlot(playerData.benchState, benchSlot)
@@ -695,6 +792,12 @@ function ShopManager.handleBenchToBoardMove(userId: number, fromPosition: Vector
 	local benchUnit = Bench.getUnitAtSlot(playerData.benchState, benchSlot)
 	if not benchUnit then
 		ShopManager.sendNotification(userId, "No unit at bench slot!", 3)
+		return false
+	end
+
+	-- Prevent placing Tank reinforcement from bench to board (guard)
+	if benchUnit.id == "tank" then
+		ShopManager.sendNotification(userId, "Reinforcements can't be moved from the bench.", 3)
 		return false
 	end
 	
@@ -808,6 +911,12 @@ function ShopManager.handleBoardUnitSell(userId: number, unitId: string, positio
 		ShopManager.sendNotification(userId, "No unit at position!", 3)
 		return false
 	end
+
+	-- Prevent selling reinforcement Tank
+	if unit.id == "tank" then
+		ShopManager.sendNotification(userId, "You can't sell reinforcements.", 3)
+		return false
+	end
 	
 	-- Verify unit ID matches
 	if unit.id ~= unitId then
@@ -855,6 +964,12 @@ function ShopManager.handleBenchUnitSell(userId: number, unitId: string, positio
 	local unit = Bench.getUnitAtSlot(playerData.benchState, benchSlot)
 	if not unit then
 		ShopManager.sendNotification(userId, "No unit at bench slot!", 3)
+		return false
+	end
+
+	-- Prevent selling reinforcement Tank (should not be on bench, but guard anyway)
+	if unit.id == "tank" then
+		ShopManager.sendNotification(userId, "You can't sell reinforcements.", 3)
 		return false
 	end
 	

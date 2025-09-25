@@ -85,9 +85,10 @@ function UI.createMainUI()
 	print("  statsFrame:", statsFrame and "YES" or "NO")
 	print("  sellUnitFrame:", sellUnitFrame and "YES" or "NO")
 	print("  editArenaFrame:", editArenaFrame and "YES" or "NO")
+	print("  traitBarFrame:", traitBarFrame and "YES" or "NO")
 	
 	-- Verify all frames exist
-	if not shopFrame or not boardFrame or not benchFrame or not statsFrame or not sellUnitFrame then
+	if not shopFrame or not boardFrame or not benchFrame or not statsFrame or not sellUnitFrame or not traitBarFrame then
 		warn("One or more UI frames not found in UI!")
 		return
 	end
@@ -187,12 +188,19 @@ end
 	- There is a Frame named TraitBarFrame under MainFrame (assigned to traitBarFrame).
 	- Inside it, there may be pre-created Frames for each trait with Name == traitId (e.g., Medieval, Mystic...)
 	  Each trait frame can optionally contain:
-	    * An ImageLabel named Icon (we'll tint it)
 	    * A TextLabel named Count (we'll show progress like "1/2" or "2/2")
 	    * A TextLabel named Name (shown when active or always)
 	If a trait frame doesn't exist, we'll create a simple placeholder Frame so UI doesn't break.
 ]]
 function UI.updateTraitsDisplay(traitData)
+	if not traitData then
+		warn("[Traits:UI] updateTraitsDisplay called with nil traitData")
+	else
+		local keys = {}
+		for k,_ in pairs(traitData) do table.insert(keys, k) end
+		table.sort(keys)
+		print("[Traits:UI] Updating display for traits:", table.concat(keys, ", "))
+	end
 	if not mainGui then return end
 	if not traitBarFrame then
 		-- Attempt to find (maybe created after UI init)
@@ -220,9 +228,7 @@ function UI.updateTraitsDisplay(traitData)
 	for traitId, def in pairs(traitDefs) do
 		local frame = traitBarFrame:FindFirstChild(traitId)
 		if frame then
-			local icon = frame:FindFirstChild("Icon")
 			local countLabel = frame:FindFirstChild("Count")
-			local nameLabel = frame:FindFirstChild("Name")
 			local info = traitData and traitData[traitId]
 			local count = info and info.count or 0
 			local active = info and info.active or false
@@ -230,20 +236,68 @@ function UI.updateTraitsDisplay(traitData)
 			if countLabel and countLabel:IsA("TextLabel") then
 				countLabel.Text = string.format("%d/%d", count, def.requirement)
 			end
+			print(string.format("[Traits:UI] %s -> count=%d active=%s", traitId, count, tostring(active)))
 			-- Visual state: active = bright color, inactive = dim
 			local activeColor = Color3.fromRGB(255, 215, 0)
 			local inactiveColor = Color3.fromRGB(70,70,70)
 			frame.BackgroundColor3 = active and activeColor or Color3.fromRGB(30,30,30)
-			if icon and icon:IsA("ImageLabel") then
-				icon.ImageTransparency = active and 0 or 0.5
-				icon.ImageColor3 = active and Color3.fromRGB(255,255,255) or inactiveColor
-			end
-			if nameLabel and nameLabel:IsA("TextLabel") then
-				nameLabel.Visible = active
-			end
 			-- Tooltip via Hover (simple: set attribute; advanced system could be added later)
 			frame:SetAttribute("Description", def.description)
+
+			-- Attach a simple tooltip on first run
+			local tooltip = frame:FindFirstChild("Tooltip")
+			if not tooltip then
+				tooltip = Instance.new("TextLabel")
+				tooltip.Name = "Tooltip"
+				tooltip.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+				tooltip.BackgroundTransparency = 0.2
+				tooltip.TextColor3 = Color3.fromRGB(255,255,255)
+				tooltip.BorderSizePixel = 0
+				tooltip.Visible = false
+				tooltip.TextWrapped = true
+				tooltip.ZIndex = 10
+				tooltip.Size = UDim2.new(0, 220, 0, 60)
+				tooltip.Position = UDim2.new(1, 8, 0, -8)
+				tooltip.TextScaled = true
+				tooltip.Font = Enum.Font.Gotham
+				tooltip.Parent = frame
+
+				-- Avoid duplicate connections
+				if not frame:GetAttribute("HoverBound") then
+					frame:SetAttribute("HoverBound", true)
+					frame.MouseEnter:Connect(function()
+						local desc = frame:GetAttribute("Description") or (def and def.description) or ""
+						tooltip.Text = desc
+						tooltip.Visible = true
+					end)
+					frame.MouseLeave:Connect(function()
+						tooltip.Visible = false
+					end)
+				end
+			end
+			-- Always ensure tooltip text matches latest description
+			if tooltip and tooltip:IsA("TextLabel") then
+				tooltip.Text = def.description or ""
+			end
 		end
+	end
+end
+
+-- Convenience: recompute traits from a boardState and update the trait bar
+function UI.refreshTraitsFromBoardState(boardState: DataStructures.BoardState)
+	if not boardState then return end
+	if not boardState.grid then
+		warn("[Traits:UI] refreshTraitsFromBoardState: boardState.grid is nil")
+	end
+	local ok, TraitSystem = pcall(function()
+		return require(game.ReplicatedStorage.Shared.TraitSystem)
+	end)
+	if ok and TraitSystem then
+		local traitData = TraitSystem.computeBoardTraits(boardState)
+		print("[Traits:UI] Computed traitData from boardState")
+		UI.updateTraitsDisplay(traitData)
+	else
+		warn("TraitSystem unavailable; cannot compute trait data from boardState")
 	end
 end
 
@@ -801,6 +855,9 @@ function UI.updateBoardDisplay(boardState: DataStructures.BoardState)
 	end
 	
 	updateSellUnitFrameVisibility()
+
+	-- Also refresh trait display from the latest board state (extra safety)
+	UI.refreshTraitsFromBoardState(boardState)
 end
 
 -- Function to update bench display
@@ -896,6 +953,7 @@ function UI.toggleBoard()
 	boardVisible = not boardVisible
 	boardFrame.Visible = boardVisible
 	benchFrame.Visible = boardVisible
+	traitBarFrame.Visible = boardVisible
 	updateSellUnitFrameVisibility()
 	-- Ensure existing unit visuals have swap-capable click handlers when showing the board
 	if boardVisible then

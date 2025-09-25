@@ -46,9 +46,10 @@ Constants.BATTLE_TIMEOUT = 300 -- seconds
 Constants.PROJECTILE_IMPACT_EFFECT_DURATION = 0.3 -- seconds
 
 -- Mapping of projectile name -> impact effect name under ReplicatedStorage.Effects
--- For now, only Bomb has an Explosion effect
 Constants.PROJECTILE_IMPACT_EFFECTS = {
 	Bomb = "Explosion",
+	Fireball = "Explosion",
+	Bullet = "Sparks"
 }
 
 -- Challenge constants
@@ -95,7 +96,7 @@ Constants.REMOTE_EVENT_NAMES = {
 	UPDATE_PLAYER_DATA = "UpdatePlayerData",
 	UPDATE_SHOP = "UpdateShop",
 	UPDATE_BENCH = "UpdateBench",
-	UPDATE_TRAITS = "UpdateTraits", -- New: send active trait info to client
+	UPDATE_TRAITS = "UpdateTraits",
 	SHOW_NOTIFICATION = "ShowNotification",
 	RESET_PLAYER_DATA = "ResetPlayerData",
 	SHOW_EDIT_ARENA_FRAME = "ShowEditArenaFrame",
@@ -109,36 +110,37 @@ Constants.TRAITS = {
 		id = "Medieval",
 		requirement = 2,
 		name = "Medieval",
-		description = "Castle Wall: Adjacent allies to Medieval units gain a shield equal to 20% of their max health.",
-		icon = "rbxassetid://0" -- placeholder icon id
+		description = "Castle Wall: Adjacent allies to Medieval units gain a shield equal to 20% of their max health."
+	},
+	Military = {
+		id = "Military",
+		requirement = 2,
+		name = "Military",
+		description = "Reinforcements (2/2 units): Summon a military reinforcement to aid in battle."
 	},
 	Mystic = {
 		id = "Mystic",
 		requirement = 2,
 		name = "Mystic",
-		description = "Ethereal Strikes: Allies' attacks deal 3% of target max health as bonus magic damage.",
-		icon = "rbxassetid://0"
+		description = "Ethereal Strikes: Allies' attacks deal 3% of target max health as bonus magic damage."
 	},
 	Artillerist = {
 		id = "Artillerist",
 		requirement = 2,
 		name = "Artillerist",
-		description = "Bombs Away!: Artillerist projectiles deal 50% splash damage in 1 hex radius.",
-		icon = "rbxassetid://0"
+		description = "Bombs Away!: Artillerist projectiles deal 50% splash damage in a 1 hex radius."
 	},
 	Juggernaut = {
 		id = "Juggernaut",
 		requirement = 2,
 		name = "Juggernaut",
-		description = "Durable: Juggernauts take 15% reduced damage.",
-		icon = "rbxassetid://0"
+		description = "Durable: Juggernauts take 15% reduced damage."
 	},
 	Ranger = {
 		id = "Ranger",
 		requirement = 2,
 		name = "Ranger",
-		description = "Hail of Arrows: Attacks grant stacking 4% attack speed (max 40%).",
-		icon = "rbxassetid://0"
+		description = "Onslaught: Attacks grant stacking 4% attack speed (max 40%)."
 	}
 }
 

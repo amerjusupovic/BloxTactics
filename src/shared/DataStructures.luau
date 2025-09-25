@@ -37,6 +37,7 @@ export type Unit = {
 	soldOut: boolean?, -- Whether the unit is sold out in shop
 	projectileName: string?, -- Name of projectile model in ReplicatedStorage.Projectiles (nil for melee)
 	traits: {string}?, -- Trait tags for the unit (e.g., {"Medieval","Juggernaut"})
+	isSummonOnly: boolean?, -- True for reinforcement/summoned units that shouldn't count for traits/shop/persistence
 	-- Runtime (battle-only) ephemeral fields (not persisted):
 	shield: number?, -- Remaining shield (from Medieval)
 	rangerStacks: number?, -- Current Ranger attack speed stacks

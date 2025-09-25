@@ -36,6 +36,12 @@ local function setupRemoteEventHandlers()
 		if playerData then
 			print("Gold:", playerData.gold, "Level:", playerData.level, "Exp:", playerData.experience)
 			UI.updatePlayerStats(playerData)
+			-- Also update trait UI on startup/login using the boardState
+			if playerData.boardState then
+				UI.refreshTraitsFromBoardState(playerData.boardState)
+			else
+				warn("No boardState in playerData; trait UI may not reflect startup state")
+			end
 		else
 			warn("Received nil player data from server!")
 		end
@@ -50,6 +56,7 @@ local function setupRemoteEventHandlers()
 	-- Handle board updates
 	local updateBoardEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.UPDATE_BOARD)
 	updateBoardEvent.OnClientEvent:Connect(function(boardState)
+		print("[Traits] Received UpdateBoard; refreshing trait UI from boardState")
 		UI.updateBoardDisplay(boardState)
 	end)
 
@@ -57,6 +64,7 @@ local function setupRemoteEventHandlers()
 	local updateTraitsEvent = remoteEventsFolder:FindFirstChild(Constants.REMOTE_EVENT_NAMES.UPDATE_TRAITS)
 	if updateTraitsEvent then
 		updateTraitsEvent.OnClientEvent:Connect(function(traitData)
+			print("[Traits] Received UpdateTraits (server-computed)")
 			UI.updateTraitsDisplay(traitData)
 		end)
 	else

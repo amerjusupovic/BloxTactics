@@ -10,6 +10,11 @@ local Unit = DataStructures.Unit
 
 local Board = {}
 
+-- Helper: whether a unit should count toward board unit limits
+local function unitCounts(unit: Unit?): boolean
+	return unit ~= nil and not unit.isSummonOnly
+end
+
 -- Function to create a new board state
 function Board.createBoardState(): BoardState
 	return {
@@ -60,7 +65,7 @@ function Board.isPositionOccupied(boardState: BoardState, position: Vector2): bo
 end
 
 -- Function to place a unit on the board
-function Board.placeUnit(boardState: BoardState, unit: Unit, position: Vector2): boolean
+function Board.placeUnit(boardState: BoardState, unit: Unit, position: Vector2, opts: { bypassCapacity: boolean? }?): boolean
 	-- Validate board state
 	if not boardState or not boardState.grid then
 		warn("Invalid board state in placeUnit")
@@ -84,15 +89,22 @@ function Board.placeUnit(boardState: BoardState, unit: Unit, position: Vector2):
 	if not boardState.maxUnits then
 		boardState.maxUnits = Constants.MAX_BOARD_UNITS
 	end
-	
-	if boardState.currentUnits >= boardState.maxUnits then
-		return false
+	-- Summoned/ephemeral units do not count and can bypass capacity
+	local counts = unitCounts(unit)
+	if counts then
+		if not (opts and opts.bypassCapacity) then
+			if boardState.currentUnits >= boardState.maxUnits then
+				return false
+			end
+		end
 	end
 	
 	-- Place unit
 	boardState.grid[position] = unit
 	unit.position = position
-	boardState.currentUnits = boardState.currentUnits + 1
+	if counts then
+		boardState.currentUnits = boardState.currentUnits + 1
+	end
 	
 	return true
 end
@@ -108,7 +120,7 @@ function Board.removeUnit(boardState: BoardState, position: Vector2): Unit?
 	if unit then
 		boardState.grid[position] = nil
 		unit.position = nil
-		if boardState.currentUnits then
+		if boardState.currentUnits and unitCounts(unit) then
 			boardState.currentUnits = math.max(0, boardState.currentUnits - 1)
 		end
 		return unit
@@ -119,7 +131,7 @@ function Board.removeUnit(boardState: BoardState, position: Vector2): Unit?
 		if typeof(gridPos) == "Vector2" and gridPos.X == position.X and gridPos.Y == position.Y then
 			boardState.grid[gridPos] = nil
 			gridUnit.position = nil
-			if boardState.currentUnits then
+			if boardState.currentUnits and unitCounts(gridUnit) then
 				boardState.currentUnits = math.max(0, boardState.currentUnits - 1)
 			end
 			return gridUnit
@@ -150,9 +162,17 @@ function Board.moveUnit(boardState: BoardState, fromPosition: Vector2, toPositio
 	-- Move unit
 	local removedUnit = Board.removeUnit(boardState, fromPosition)
 	if removedUnit then
+		-- Place respecting capacity rules for counted units; use bypassCapacity since we're moving existing
+		local counts = unitCounts(unit)
+		if counts and boardState.currentUnits >= boardState.maxUnits then
+			-- Should not happen given we just removed a counted unit, but guard anyway
+			return false
+		end
 		boardState.grid[toPosition] = unit
 		unit.position = toPosition
-		boardState.currentUnits = boardState.currentUnits + 1  -- Add back since removeUnit decremented it
+		if counts then
+			boardState.currentUnits = boardState.currentUnits + 1
+		end
 		return true
 	end
 	
@@ -178,13 +198,16 @@ function Board.swapUnits(boardState: BoardState, position1: Vector2, position2: 
 	-- Swap units
 	local removedUnit1 = Board.removeUnit(boardState, position1)
 	local removedUnit2 = Board.removeUnit(boardState, position2)
-	
 	if removedUnit1 and removedUnit2 then
+		-- Place both back; increment counts only for counted units
 		boardState.grid[position1] = unit2
 		boardState.grid[position2] = unit1
 		unit1.position = position2
 		unit2.position = position1
-		boardState.currentUnits = boardState.currentUnits + 2  -- Add back since removeUnit decremented it twice
+		local addCount = 0
+		if unitCounts(unit1) then addCount += 1 end
+		if unitCounts(unit2) then addCount += 1 end
+		boardState.currentUnits = boardState.currentUnits + addCount
 		return true
 	end
 	

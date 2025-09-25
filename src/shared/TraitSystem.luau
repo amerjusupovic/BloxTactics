@@ -6,6 +6,7 @@
 
 local Constants = require(script.Parent.Constants)
 local DataStructures = require(script.Parent.DataStructures)
+local UnitDatabase = require(script.Parent.UnitDatabase)
 local BoardState = DataStructures.BoardState
 local Unit = DataStructures.Unit
 
@@ -15,16 +16,43 @@ local TraitSystem = {}
 function TraitSystem.computeBoardTraits(boardState: BoardState): {[string]: any}
 	local result = {}
 	if not boardState or not boardState.grid then return result end
-	for pos, unit in pairs(boardState.grid) do
-		if unit and unit.traits then
-			for _, trait in ipairs(unit.traits) do
-				local entry = result[trait]
-				if not entry then
-					entry = {count = 0, active = false, units = {}}
-					result[trait] = entry
+
+	-- Track per-trait unique contributing unit ids
+	local contributorsByTrait: {[string]: {[string]: boolean}} = {}
+
+	for _, unit in pairs(boardState.grid) do
+		if unit then
+			-- Ignore summon-only units for trait counts (e.g., Tank)
+			if unit.isSummonOnly then
+				continue
+			end
+			local unitId = unit.id
+			-- Backfill traits if missing using UnitDatabase (handles older saved data)
+			local traits = unit.traits
+			if (not traits) or (#traits == 0) then
+				local base = UnitDatabase.getUnitById(unitId)
+				traits = base and base.traits or nil
+			end
+			if traits then
+				for _, trait in ipairs(traits) do
+					local entry = result[trait]
+					if not entry then
+						entry = {count = 0, active = false, units = {}}
+						result[trait] = entry
+					end
+					-- Initialize contributor set for this trait
+					local set = contributorsByTrait[trait]
+					if not set then
+						set = {}
+						contributorsByTrait[trait] = set
+					end
+					if not set[unitId] then
+						set[unitId] = true
+						entry.count += 1
+						-- Keep one representative unit per contributing unit id (for UI if needed)
+						table.insert(entry.units, unit)
+					end
 				end
-				entry.count += 1
-				table.insert(entry.units, unit)
 			end
 		end
 	end
@@ -41,13 +69,23 @@ end
 -- Battle prep: apply pre-battle bonuses (shields, juggernaut DR) to a list of battle units
 -- battleUnits: { { unit=Unit, model=Model, originalHexName=string, maxHealth:number, ... } }
 function TraitSystem.applyPreBattleBonuses(battleUnits)
-	-- Build counts and index by trait
-	local counts = {}
+	-- Build counts per trait using unique unit base ids
+	local counts: {[string]: number} = {}
+	local contributorsByTrait: {[string]: {[string]: boolean}} = {}
 	for _, bu in ipairs(battleUnits) do
 		local unit = bu.unit
 		if unit and unit.traits then
+			local unitId = unit.id
 			for _, trait in ipairs(unit.traits) do
-				counts[trait] = (counts[trait] or 0) + 1
+				local set = contributorsByTrait[trait]
+				if not set then
+					set = {}
+					contributorsByTrait[trait] = set
+				end
+				if not set[unitId] then
+					set[unitId] = true
+					counts[trait] = (counts[trait] or 0) + 1
+				end
 			end
 		end
 	end
