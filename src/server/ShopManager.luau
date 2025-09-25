@@ -517,6 +517,11 @@ end
 function ShopManager.handleUnitMove(userId: number, fromPosition: Vector2, toPosition: Vector2): boolean
 	local playerData = PlayerDataManager.getPlayerData(userId)
 	if not playerData then return false end
+
+	-- Ensure ephemeral reinforcements (e.g., Tank) are in sync with current trait state
+	pcall(function()
+		ShopManager.ensureMilitaryReinforcement(userId, false)
+	end)
 	
 	-- Determine movement type based on positions
 	local fromBench = fromPosition.X < 0

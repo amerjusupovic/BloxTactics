@@ -125,7 +125,7 @@ local BASE_UNITS = {
 			armor = 40,
 			magicResist = 20,
 			attackSpeed = 0.5,
-			range = 4
+			range = 3
 		},
 		abilities = {},
 		isSummonOnly = true
