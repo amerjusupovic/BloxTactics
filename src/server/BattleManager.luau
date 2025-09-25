@@ -127,11 +127,10 @@ local function createBattleUnit(model: Model?, unit: DataStructures.Unit, team: 
 		local rigType = tostring(humanoid.RigType)
 		print(string.format("[ANIM] %s rig type for model %s", rigType, model.Name))
 	end
-	-- Force health bar visibility for valid humanoids (helps diagnose missing Head)
+	-- Hide default Roblox health bar (we render our own via client BillboardGui)
 	if humanoid then
 		pcall(function()
-			humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOn
-			humanoid.HealthDisplayDistance = 200
+			humanoid.HealthDisplayDistance = 0
 			-- Tolerate missing necks on imported rigs so animations can still run
 			humanoid.RequiresNeck = false
 		end)
@@ -828,7 +827,7 @@ local function attackTarget(battleData: BattleData, unit: BattleUnit, target: Ba
 	-- Calculate damage data upfront
 	local damage = unit.unit.stats.attack
 	local armor = target.unit.stats.armor
-	local actualDamage = math.max(1, damage - armor)
+	local actualDamage = math.max(1, damage - math.sqrt(armor))
 	print("DEBUG: Unit " .. unit.unit.name .. " initiating attack on " .. target.unit.name .. " (baseDamage=" .. damage .. ", armor=" .. armor .. ", postMitigation=" .. actualDamage .. ")")
 	
 	-- Face the target and play attack animation for attacker
@@ -892,6 +891,10 @@ local function attackTarget(battleData: BattleData, unit: BattleUnit, target: Ba
 				humanoid:TakeDamage(bonusMagic)
 			end
 			target.health = humanoid.Health
+			-- Sync model attribute so client health bar updates
+			if target.model then
+				target.model:SetAttribute("Health", target.health)
+			end
 			print("DEBUG: Target health after damage: " .. target.health)
 			if humanoid.Health <= 0 then
 				target.isAlive = false
@@ -978,6 +981,8 @@ local function attackTarget(battleData: BattleData, unit: BattleUnit, target: Ba
 							if e.model then e.model:SetAttribute("Shield", e.shield) end
 						end
 						if remain2 > 0 then eh:TakeDamage(remain2) end
+						-- Sync splash recipient health to attribute for client UI
+						if e.model then e.model:SetAttribute("Health", eh.Health) end
 						if eh.Health <= 0 then
 							e.isAlive = false
 							e.model:SetAttribute("IsAlive", false)

@@ -9,6 +9,7 @@ local UserInputService = game:GetService("UserInputService")
 
 -- Load client modules
 local UI = require(script.Parent.Client.UI)
+local ShieldVisuals = require(script.Parent.Client.ShieldVisuals)
 local PVPChallengeUI = require(script.Parent.Client.PVPChallengeUI)
 local ChallengePromptUI = require(script.Parent.Client.ChallengePromptUI)
 local IncomingChallengeUI = require(script.Parent.Client.IncomingChallengeUI)
@@ -154,6 +155,11 @@ local function initializeClient()
 	print("Creating main UI...")
 	UI.createMainUI()
 	print("Main UI created successfully!")
+
+	-- Initialize shield visuals (Highlights units with active shields)
+	print("Initializing Shield visuals...")
+	ShieldVisuals.init()
+	print("Shield visuals initialized!")
 	
 	-- Initialize PVP Challenge UI
 	print("Initializing PVP Challenge UI...")

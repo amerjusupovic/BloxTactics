@@ -110,7 +110,7 @@ Constants.TRAITS = {
 		id = "Medieval",
 		requirement = 2,
 		name = "Medieval",
-		description = "Castle Wall: Adjacent allies to Medieval units gain a shield equal to 20% of their max health."
+		description = "Castle Wall: Medieval units grant adjacent allies a shield equal to 10% of their max health."
 	},
 	Military = {
 		id = "Military",
