@@ -492,10 +492,16 @@ function UnitSpawner.spawnExistingUnits(userId: number, playerData: any)
 	if playerData.boardState and playerData.boardState.grid then
 		for position, unit in pairs(playerData.boardState.grid) do
 			if position and unit then
-				print("Spawning existing board unit:", unit.name, "at position:", position)
-				local success = UnitSpawner.spawnUnitOnBoard(userId, unit, position)
-				if success then
-					spawnedCount = spawnedCount + 1
+				-- Skip ephemeral/summon-only units (e.g., Tank) because reinforcements are handled
+				-- by ShopManager.ensureMilitaryReinforcement to avoid race conditions and duplicates.
+				if unit.isSummonOnly then
+					print("Skipping summon-only unit during existing spawn:", unit.name, position)
+				else
+					print("Spawning existing board unit:", unit.name, "at position:", position)
+					local success = UnitSpawner.spawnUnitOnBoard(userId, unit, position)
+					if success then
+						spawnedCount = spawnedCount + 1
+					end
 				end
 			end
 		end

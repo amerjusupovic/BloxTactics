@@ -971,13 +971,45 @@ function UI.updateBoardDisplay(boardState: DataStructures.BoardState)
 		end
 	end
 	
-	-- Place units from board state
-	for position, unit in pairs(boardState.grid) do
-		if position and unit then
-			print("Placing unit", unit.name, "at position", position)
-			UI.placeUnitOnBoard(unit, position)
+	-- Place units from board state (robust position resolution for reinforcement units)
+	for rawKey, unit in pairs(boardState.grid) do
+		if unit then
+			local posVec: Vector2? = nil
+			-- Preferred: key is a Vector2
+			if typeof(rawKey) == "Vector2" then
+				posVec = rawKey
+			end
+			-- Fallback: unit.position field
+			if not posVec and unit.position and typeof(unit.position) == "Vector2" then
+				posVec = unit.position
+			end
+			-- Fallback: string key like "3,2" or "Vector2(3, 2)" or "<Vector2> (3, 2)"
+			if not posVec and type(rawKey) == "string" then
+				local xStr,yStr = string.match(rawKey, "^(%-?%d+),%s*(%-?%d+)$")
+				if not xStr then
+					-- Try to extract numbers inside parentheses
+					local inside = string.match(rawKey, "%(%-?%d+,%s*%-?%d+%)")
+					if inside then
+						xStr,yStr = string.match(inside, "(%-?%d+),%s*(%-?%d+)")
+					end
+				end
+				if xStr and yStr then
+					local x = tonumber(xStr)
+					local y = tonumber(yStr)
+					if x and y then
+						posVec = Vector2.new(x,y)
+					end
+				end
+			end
+
+			if posVec then
+				print("Placing unit", unit.name, "at resolved position", posVec)
+				UI.placeUnitOnBoard(unit, posVec)
+			else
+				print("[BoardDisplay] Could not resolve position for unit", unit.name, "rawKey=", rawKey, "unit.position=", unit.position)
+			end
 		else
-			print("Skipping invalid position or unit:", position, unit)
+			print("Skipping nil unit at key:", rawKey)
 		end
 	end
 

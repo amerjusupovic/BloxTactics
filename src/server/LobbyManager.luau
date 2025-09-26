@@ -512,26 +512,31 @@ function LobbyManager.initializePlayerInLobby(playerId: number, player: Player, 
 	-- Send initial shop data to client
 	print("Sending shop data to " .. player.Name)
 	ShopManager.sendShopToClient(playerId)
-	
-	-- Send initial player data to client (after arena has spawned with correct selection)
+
+	-- BEFORE sending any board / player data to the client, ensure ephemeral reinforcements
+	-- (e.g. Military Tank) are materialized so the very first board + trait UI the client sees
+	-- already includes them. Previously this happened after the client already computed traits,
+	-- causing an intermittent delay where the Tank appeared later.
+	pcall(function()
+		ShopManager.ensureMilitaryReinforcement(playerId, true) -- allow model spawn now
+	end)
+
+	-- Send initial player data to client (after arena has spawned with correct selection & reinforcements)
 	print("Sending initial player data (arena selection: " .. tostring(playerData.selectedArenaName) .. ") to " .. player.Name)
 	local updatePlayerDataEvent = game.ReplicatedStorage.RemoteEvents:WaitForChild("UpdatePlayerData")
 	updatePlayerDataEvent:FireClient(player, playerData)
 	
 	-- Send board and bench updates to client
-	local updateBoardEvent = game.ReplicatedStorage.RemoteEvents:WaitForChild("UpdateBoard")
-	local updateBenchEvent = game.ReplicatedStorage.RemoteEvents:WaitForChild("UpdateBench")
-	if updateBoardEvent then
-		-- Ensure Military reinforcement state before sending initial board
-		local ShopManager = require(script.Parent.ShopManager)
-		pcall(function()
-			ShopManager.ensureMilitaryReinforcement(playerId, false)
-		end)
-		updateBoardEvent:FireClient(player, playerData.boardState)
-	end
-	if updateBenchEvent then
-		updateBenchEvent:FireClient(player, playerData.benchState)
-	end
+	-- Instead of firing UpdateBoard directly (which could miss late-spawned reinforcements like Tank
+	-- if ensureMilitaryReinforcement timing ever changes), use the centralized send helpers so that
+	-- reinforcement logic ALWAYS runs immediately before broadcasting. This guarantees the client
+	-- board UI sees the Tank the first time when Military is active.
+	pcall(function()
+		ShopManager.sendBoardUpdate(playerId)
+	end)
+	pcall(function()
+		ShopManager.sendBenchUpdate(playerId)
+	end)
 	
 	-- Spawn existing units on the physical board/bench
 	spawn(function()
