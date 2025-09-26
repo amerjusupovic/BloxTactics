@@ -45,7 +45,8 @@ local BattleUnit = {
 	isAlive = true,
 	originalPosition = Vector3.new(0, 0, 0),
 	originalParent = nil, -- Original parent Instance (expected to be a Hex_ part)
-	originalHexName = nil -- Name of the original hex parent (easier re-parenting on reset)
+	originalHexName = nil, -- Name of the original hex parent (easier re-parenting on reset)
+	originalCFrame = nil -- Full original pivot CFrame for rotation restoration
 }
 
 -- Active battles storage
@@ -155,6 +156,7 @@ local function createBattleUnit(model: Model?, unit: DataStructures.Unit, team: 
 		originalPosition = model:GetPivot().Position,
 		originalParent = model.Parent,
 		originalHexName = (model.Parent and typeof(model.Parent.Name) == "string" and model.Parent.Name:find("Hex_") and model.Parent.Name) or nil,
+		originalCFrame = model:GetPivot(),
 		battleUnitId = uniqueId
 	}
 	
@@ -1087,12 +1089,25 @@ local function resetUnitsAfterBattle(battleData: BattleData)
 				unit.model:SetAttribute("UnitTier", coreUnitTier)
 			end
 
-			-- Completely reset all visual changes
+			-- Completely reset all visual changes and physics
 			for _, part in pairs(unit.model:GetDescendants()) do
 				if part:IsA("BasePart") then
 					part.Transparency = 0
+					-- Clear any leftover velocities from battle movement
+					part.AssemblyLinearVelocity = Vector3.zero
+					part.AssemblyAngularVelocity = Vector3.zero
 				end
 			end
+			-- Remove any temporary damage highlight if still present
+			local dmgHl = unit.model:FindFirstChild("BT_DamageHighlight")
+			if dmgHl and dmgHl:IsA("Highlight") then
+				pcall(function() dmgHl:Destroy() end)
+			end
+
+			-- Clear transient battle attributes so client UI resets
+			unit.shield = 0
+			unit.model:SetAttribute("Shield", 0)
+			unit.model:SetAttribute("RangerStacks", nil)
 
 			-- Clear temporary battle attributes on the model
 			unit.model:SetAttribute("BattleUnit", nil)
@@ -1116,14 +1131,26 @@ local function resetUnitsAfterBattle(battleData: BattleData)
 				local unitHalf = unitSizeR.Y / 2
 				local hexTopY = hexPart.Position.Y + (hexPart.Size.Y / 2)
 				local targetPos = Vector3.new(hexPart.Position.X, hexTopY + unitHalf, hexPart.Position.Z)
-				local pivot = unit.model:GetPivot()
-				local _, _, _, r00, r01, r02, r10, r11, r12, r20, r21, r22 = pivot:GetComponents()
-				local adjustedCFrame = CFrame.new(targetPos.X, targetPos.Y, targetPos.Z, r00, r01, r02, r10, r11, r12, r20, r21, r22)
+				-- Restore original rotation if we captured it; otherwise align to hex
+				local adjustedCFrame
+				if unit.originalCFrame then
+					local _, _, _, r00, r01, r02, r10, r11, r12, r20, r21, r22 = unit.originalCFrame:GetComponents()
+					adjustedCFrame = CFrame.new(targetPos.X, targetPos.Y, targetPos.Z, r00, r01, r02, r10, r11, r12, r20, r21, r22)
+				else
+					adjustedCFrame = CFrame.lookAt(targetPos, targetPos + hexPart.CFrame.LookVector, Vector3.yAxis)
+				end
 				unit.model:PivotTo(adjustedCFrame)
 				unit.position = targetPos
 			else
 				-- As a last resort, move back to original world position with a small offset
-				local targetCFrame = CFrame.new(Vector3.new(unit.originalPosition.X, Constants.GROUND_LEVEL, unit.originalPosition.Z) + Vector3.new(0, BATTLE_CONSTANTS.UNIT_HEIGHT_OFFSET, 0))
+				local pos = Vector3.new(unit.originalPosition.X, Constants.GROUND_LEVEL, unit.originalPosition.Z) + Vector3.new(0, BATTLE_CONSTANTS.UNIT_HEIGHT_OFFSET, 0)
+				local targetCFrame
+				if unit.originalCFrame then
+					local _, _, _, r00, r01, r02, r10, r11, r12, r20, r21, r22 = unit.originalCFrame:GetComponents()
+					targetCFrame = CFrame.new(pos.X, pos.Y, pos.Z, r00, r01, r02, r10, r11, r12, r20, r21, r22)
+				else
+					targetCFrame = CFrame.lookAt(pos, pos + Vector3.zAxis, Vector3.yAxis)
+				end
 				unit.model:PivotTo(targetCFrame)
 				unit.position = targetCFrame.Position
 			end

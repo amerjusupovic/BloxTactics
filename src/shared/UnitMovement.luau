@@ -5,6 +5,17 @@
 
 local Constants = require(game.ReplicatedStorage.Shared.Constants)
 
+-- Optional: access unit base data for tooltip fallbacks
+local UnitDatabase
+do
+	local ok, mod = pcall(function()
+		return require(game.ReplicatedStorage.Shared.UnitDatabase)
+	end)
+	if ok then
+		UnitDatabase = mod
+	end
+end
+
 local UnitMovement = {}
 
 -- Unit selection state
@@ -234,6 +245,116 @@ function UnitMovement.createUnitVisual(hex: GuiObject, unit: any, x: number?, y:
 	
 	-- Add click handler (supports swap when another unit is selected)
 	UnitMovement.addUnitClickHandler(unitVisual, hex, context, onMoveUnit)
+
+	-- Attach hover tooltip (similar formatting to trait tooltip)
+	if not unitVisual:GetAttribute("TooltipBound") then
+		unitVisual:SetAttribute("TooltipBound", true)
+
+		-- Create tooltip label once (parent to container to avoid being occluded/clipped)
+		local tooltip = Instance.new("TextLabel")
+		tooltip.Name = "Tooltip"
+		tooltip.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+		tooltip.BackgroundTransparency = 0.15
+		tooltip.TextColor3 = Color3.fromRGB(255, 255, 255)
+		tooltip.BorderSizePixel = 0
+		tooltip.Visible = false
+		tooltip.TextWrapped = true
+		tooltip.ZIndex = 1000
+		tooltip.Active = false
+		tooltip.ClipsDescendants = false
+		tooltip.Size = UDim2.new(0, 260, 0, 110)
+		tooltip.Position = UDim2.new(0, 0, 0, 0)
+		tooltip.TextScaled = true
+		tooltip.Font = Enum.Font.Gotham
+		tooltip.TextXAlignment = Enum.TextXAlignment.Left
+		tooltip.TextYAlignment = Enum.TextYAlignment.Top
+		-- Parent to the board/bench container (hex's parent) to avoid sibling occlusion
+		local container = hex and hex.Parent
+		if container and container:IsA("GuiObject") then
+			tooltip.Parent = container
+		else
+			-- Fallback: keep under the unitVisual (may be occluded in some setups)
+			tooltip.Parent = unitVisual
+		end
+
+		-- Helper to build tooltip text safely
+		local function buildTooltipText(): string
+			local name = unit.name or (typeof(unitVisual:GetAttribute("UnitName")) == "string" and unitVisual:GetAttribute("UnitName")) or "Unit"
+			local cost = unit.cost or 0
+			local tier = unit.tier or (typeof(unitVisual:GetAttribute("UnitTier")) == "number" and unitVisual:GetAttribute("UnitTier")) or 1
+
+			-- Resolve stats with fallbacks
+			local stats = unit.stats
+			local traits = unit.traits
+			if (not stats or not traits) and UnitDatabase and unit.id then
+				local base = UnitDatabase.getUnitById(unit.id)
+				if base then
+					traits = traits or base.traits
+					if not stats and base.baseStats then
+						local ok2, calc = pcall(function()
+							return UnitDatabase.calculateUnitStats(base.baseStats, tier)
+						end)
+						if ok2 then stats = calc end
+					end
+				end
+			end
+
+			local health = stats and stats.health or 0
+			local attack = stats and stats.attack or 0
+			local atkSpd = stats and stats.attackSpeed or 0
+			local armor = stats and stats.armor or 0
+			local traitText = "None"
+			if traits and typeof(traits) == "table" then
+				local parts = {}
+				for i, t in ipairs(traits) do parts[i] = tostring(t) end
+				traitText = table.concat(parts, ", ")
+			end
+
+			return string.format(
+				"%s  (Cost: %d)\nTraits: %s\nHealth: %d    Atk Spd: %.2f\nDamage: %d    Armor: %d",
+				name, cost, traitText, health, atkSpd, attack, armor
+			)
+		end
+
+		-- Bind hover events
+		unitVisual.MouseEnter:Connect(function()
+			tooltip.Text = buildTooltipText()
+			-- Position tooltip near the unit using absolute coordinates
+			local parentObj: GuiObject = tooltip.Parent :: any
+			if parentObj and parentObj.AbsoluteSize then
+				local unitAbsPos = unitVisual.AbsolutePosition
+				local unitAbsSize = unitVisual.AbsoluteSize
+				local parentAbsPos = parentObj.AbsolutePosition
+				local parentAbsSize = parentObj.AbsoluteSize
+
+				local offsetX = 8
+				local offsetY = 0
+				local desiredX = (unitAbsPos.X - parentAbsPos.X) + unitAbsSize.X + offsetX
+				local desiredY = (unitAbsPos.Y - parentAbsPos.Y) + offsetY
+
+				-- Clamp within container bounds; if overflowing right, place to the left of the unit
+				local width = tooltip.Size.X.Offset
+				local height = tooltip.Size.Y.Offset
+				if desiredX + width > parentAbsSize.X then
+					desiredX = math.max(0, (unitAbsPos.X - parentAbsPos.X) - width - offsetX)
+				end
+				desiredY = math.clamp(desiredY, 0, math.max(0, parentAbsSize.Y - height))
+
+				tooltip.Position = UDim2.fromOffset(desiredX, desiredY)
+			end
+			tooltip.Visible = true
+		end)
+		unitVisual.MouseLeave:Connect(function()
+			tooltip.Visible = false
+		end)
+
+		-- Clean up tooltip if the unit visual is destroyed
+		unitVisual.Destroying:Connect(function()
+			if tooltip then
+				tooltip:Destroy()
+			end
+		end)
+	end
 	
 	return unitVisual
 end

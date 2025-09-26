@@ -39,9 +39,9 @@ local function ensureShieldBillboard(model: Model, shield: number, maxHealth: nu
         bb.Name = BILLBOARD_NAME
         bb.AlwaysOnTop = true
         bb.LightInfluence = 0
-    bb.Size = UDim2.fromOffset(100, 10)
-    -- Place shield bar slightly above health bar
-    bb.StudsOffsetWorldSpace = Vector3.new(0, (model:GetExtentsSize().Y) + 10, 0)
+        bb.Size = UDim2.fromOffset(100, 10)
+        -- Place shield bar slightly above health bar
+        bb.StudsOffsetWorldSpace = Vector3.new(0, (model:GetExtentsSize().Y) + 5, 0)
         bb.Adornee = adornee
         bb.Parent = model
 

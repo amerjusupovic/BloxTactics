@@ -10,6 +10,50 @@ local PlayerData = require(script.Parent.PlayerData)
 
 local ArenaSpawner = {}
 
+-- Helper: update the Arena Sign (SurfaceGui Title + PlayerImage) with the owner's name and headshot
+local function updateArenaSign(arena: Instance, playerName: string, userId: number)
+	if not arena then return end
+	local signModel = arena:FindFirstChild("Arena Sign")
+	if not signModel then
+		return
+	end
+	local signPart = signModel:FindFirstChild("Sign")
+	if not signPart then
+		return
+	end
+	-- Find a SurfaceGui under the Sign part
+	local surfaceGui: SurfaceGui? = nil
+	for _, desc in ipairs(signPart:GetDescendants()) do
+		if desc:IsA("SurfaceGui") then
+			surfaceGui = desc
+			break
+		end
+	end
+	if not surfaceGui then
+		return
+	end
+
+	-- Set the title text if present
+	local titleLabel = surfaceGui:FindFirstChild("Title", true)
+	if titleLabel and titleLabel:IsA("TextLabel") then
+		titleLabel.Text = string.format("%s's Arena", playerName)
+	end
+
+	-- Set the player headshot if present
+	local imageLabel = surfaceGui:FindFirstChild("PlayerImage", true)
+	if imageLabel and imageLabel:IsA("ImageLabel") then
+		local ok, content, _ = pcall(function()
+			return Players:GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
+		end)
+		if ok and type(content) == "string" and #content > 0 then
+			imageLabel.Image = content
+		else
+			-- Fallback to rbxthumb URL if API failed for some reason
+			imageLabel.Image = string.format("rbxthumb://type=AvatarHeadShot&id=%d&w=420&h=420", userId)
+		end
+	end
+end
+
 -- Helper: move a Model to a world position while preserving its existing orientation.
 -- If the model has a PrimaryPart, we use it; otherwise we compute pivot from GetPivot.
 local function moveModelPreserveOrientation(model: Instance, targetPosition: Vector3)
@@ -190,6 +234,9 @@ function ArenaSpawner:createPlayerArena(playerId: number, playerName: string, pl
 	
 	-- Parent the cloned arena to the player folder
 	clonedArena.Parent = playerFolder
+
+	-- Update arena sign with owner's name and headshot
+	updateArenaSign(clonedArena, playerName, playerId)
 	
 	
 	-- Check if Enemy Unit Board exists in the cloned arena
@@ -483,6 +530,11 @@ function ArenaSpawner:switchArenaForPlayer(playerId: number, newArenaName: strin
 	if newArena:IsA("Model") and targetPosition then
 		moveModelPreserveOrientation(newArena, targetPosition)
 	end
+
+	-- Update arena sign for the switched arena
+	local player = Players:GetPlayerByUserId(playerId)
+	local playerName = player and player.Name or tostring(playerId)
+	updateArenaSign(newArena, playerName, playerId)
 
 	-- Transfer units
 	if currentArena then
