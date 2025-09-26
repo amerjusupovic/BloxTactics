@@ -101,7 +101,20 @@ Constants.REMOTE_EVENT_NAMES = {
 	RESET_PLAYER_DATA = "ResetPlayerData",
 	SHOW_EDIT_ARENA_FRAME = "ShowEditArenaFrame",
 	HIDE_EDIT_ARENA_FRAME = "HideEditArenaFrame",
-	SWITCH_ARENA = "SwitchArena" -- Client requests switching arena theme
+	SWITCH_ARENA = "SwitchArena", -- Client requests switching arena theme
+	RETURN_TO_ARENA = "ReturnToArena", -- Client requests teleport back to their own arena
+}
+
+-- Developer product / gamepass style arena cosmetics (developer products so they can be bought multiple times if different skins later)
+-- Mapping uses a canonical key (remove spaces) for easier lookup on client when given an arena display name.
+-- NOTE: Only Volcanic Arena is purchasable for now.
+Constants.ARENA_PRODUCTS = {
+	VolcanicArena = 3414455268, -- "Volcanic Arena" developer product id (cost: 100 Robux)
+}
+
+-- Set of arenas which are always owned by default (cannot be purchased / always selectable)
+Constants.DEFAULT_OWNED_ARENAS = {
+	[Constants.DEFAULT_ARENA_NAME] = true,
 }
 
 -- Trait definitions (shared for UI + server logic)

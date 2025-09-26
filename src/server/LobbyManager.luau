@@ -247,15 +247,39 @@ function LobbyManager.setupRemoteEventHandlers()
 				end
 			end
 
-			-- Validate template exists after normalization
+				-- Validate template exists after normalization
 			if not arenasFolder or not arenasFolder:FindFirstChild(newArenaName) then
 				warn("Invalid arena switch request - template missing: " .. tostring(inputOriginal))
 				return
 			end
-			-- Update player data
-			local PlayerDataManager = require(script.Parent.PlayerData)
-			local data = PlayerDataManager.getPlayerData(player.UserId)
-			if not data then return end
+
+				-- Ownership gating: allow default arena, otherwise require owned
+				local PlayerDataManager = require(script.Parent.PlayerData)
+				local data = PlayerDataManager.getPlayerData(player.UserId)
+				if not data then return end
+				local owned = false
+				-- Always allow the default arena
+				if newArenaName == Constants.DEFAULT_ARENA_NAME then
+					owned = true
+				end
+				if data.arenaOwnership then
+					-- match either exact or normalized (to be safe if names change spacing)
+					local normalizedRequest = normalize(newArenaName)
+					for ownedName,_ in pairs(data.arenaOwnership) do
+						if ownedName == newArenaName or normalize(ownedName) == normalizedRequest then
+							owned = true; break
+						end
+					end
+				end
+				if not owned then
+					-- deny switch and notify
+					local notify = remoteEventsFolder:FindFirstChild(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
+					if notify then
+						notify:FireClient(player, "You don't own this arena skin. Purchase it first!", 3)
+					end
+					return
+				end
+				-- Update player data
 			data.selectedArenaName = newArenaName
 			data.lastUpdated = os.time()
 			-- Decide whether to persist immediately or throttle
@@ -297,6 +321,77 @@ function LobbyManager.setupRemoteEventHandlers()
 						notify:FireClient(player, "Arena switched to " .. newArenaName, 2)
 					end
 				end
+			end
+		end)
+	end
+
+	-- Handle return to arena teleport
+	local returnToArenaEvent = remoteEventsFolder:FindFirstChild(Constants.REMOTE_EVENT_NAMES.RETURN_TO_ARENA)
+	if returnToArenaEvent then
+		returnToArenaEvent.OnServerEvent:Connect(function(player)
+			-- Find the player's arena (reuse existing lobby + arenaSpawner knowledge or fallback to search)
+			local lobbyData = LobbyManager.getPlayerLobby(player.UserId)
+			local targetArena: Instance? = nil
+			if lobbyData and lobbyData.spawnPoints then
+				local playerFolder = lobbyData.spawnPoints:FindFirstChild(tostring(player.UserId))
+				if playerFolder then
+					for _, child in ipairs(playerFolder:GetChildren()) do
+						if child.Name:find("Arena") then
+							targetArena = child
+							break
+						end
+					end
+				end
+			end
+			-- Fallback: brute-force search (in case data not yet cached)
+			if not targetArena then
+				for _, lobby in ipairs(workspace:GetChildren()) do
+					if lobby.Name:find("Lobby_") then
+						local sp = lobby:FindFirstChild("SpawnPoints")
+						if sp then
+							local pf = sp:FindFirstChild(tostring(player.UserId))
+							if pf then
+								for _, child in ipairs(pf:GetChildren()) do
+									if child.Name:find("Arena") then
+										targetArena = child
+										break
+									end
+								end
+							end
+						end
+					-- Added missing end for lobby.Name:find("Lobby_") conditional
+					end
+					if targetArena then break end
+				end
+			end
+			if targetArena and player.Character then
+				local root = player.Character:FindFirstChild("HumanoidRootPart")
+				if root then
+					local arenaCenter: Vector3
+					if targetArena:IsA("Model") then
+						arenaCenter = targetArena:GetPivot().Position
+					else
+						-- approximate center from parts
+						local total = Vector3.new()
+						local count = 0
+						for _, d in ipairs(targetArena:GetDescendants()) do
+							if d:IsA("BasePart") then
+								total += d.Position; count += 1
+							end
+						end
+						arenaCenter = (count > 0) and (total / count) or root.Position
+					end
+					local destination = arenaCenter + Vector3.new(0, 5, Constants.PLAYER_SPAWN_FORWARD_OFFSET)
+					root.CFrame = CFrame.new(destination)
+					local notify = remoteEventsFolder:FindFirstChild(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
+					if notify then
+						notify:FireClient(player, "Returned to your arena", 2)
+					end
+				else
+					warn("ReturnToArena: HumanoidRootPart missing for " .. player.Name)
+				end
+			else
+				warn("ReturnToArena: Could not locate arena for player " .. player.Name)
 			end
 		end)
 	end

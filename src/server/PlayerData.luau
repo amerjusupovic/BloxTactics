@@ -32,6 +32,7 @@ local function createDefaultPlayerData(userId: number, username: string): Player
 		experience = 0,
 		units = {},
 		items = {},
+		arenaOwnership = table.clone(Constants.DEFAULT_OWNED_ARENAS), -- map of arena name -> true if owned
 		boardState = {
 			grid = {},
 			maxUnits = 3, -- Level 1 + 2 = 3 units max
@@ -90,6 +91,13 @@ function PlayerDataManager.loadPlayerData(userId: number, username: string): Pla
 		if not playerData.streak then
 			playerData.streak = 0
 		end
+
+		-- Ensure arenaOwnership structure exists & default arena owned
+		if not playerData.arenaOwnership then
+			playerData.arenaOwnership = table.clone(Constants.DEFAULT_OWNED_ARENAS)
+		else
+			playerData.arenaOwnership[Constants.DEFAULT_ARENA_NAME] = true
+		end
 		
 		playerData.lastUpdated = os.time()
 		playerDataCache[userId] = playerData
@@ -112,7 +120,8 @@ function PlayerDataManager.serializePlayerData(playerData: PlayerData): {[string
 		gold = playerData.gold,
 		streak = playerData.streak,
 		lastUpdated = playerData.lastUpdated,
-		selectedArenaName = playerData.selectedArenaName
+		selectedArenaName = playerData.selectedArenaName,
+		arenaOwnership = playerData.arenaOwnership or table.clone(Constants.DEFAULT_OWNED_ARENAS)
 	}
 	
 	-- Serialize shop state if it exists
@@ -194,8 +203,12 @@ function PlayerDataManager.deserializePlayerData(serialized: {[string]: any}): P
 		gold = serialized.gold,
 		streak = serialized.streak,
 		lastUpdated = serialized.lastUpdated,
-		selectedArenaName = serialized.selectedArenaName or Constants.DEFAULT_ARENA_NAME
+		selectedArenaName = serialized.selectedArenaName or Constants.DEFAULT_ARENA_NAME,
+		arenaOwnership = serialized.arenaOwnership or table.clone(Constants.DEFAULT_OWNED_ARENAS)
 	}
+
+	-- Guarantee default arena is owned
+	playerData.arenaOwnership[Constants.DEFAULT_ARENA_NAME] = true
 	
 	-- Deserialize shop state if it exists
 	if serialized.shopState then

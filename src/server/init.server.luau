@@ -7,6 +7,7 @@
 local LobbyManager = require(script.Parent.Server.LobbyManager)
 local RemoteEvents = require(script.Parent.Server.RemoteEvents)
 local Players = game:GetService("Players")
+local MarketplaceHandler = require(script.Parent.Server.MarketplaceHandler)
 
 print("BloxTactics Server initialized successfully!")
 
@@ -21,6 +22,11 @@ local function initializeGame()
 	-- Initialize the Lobby Manager (this handles everything else)
 	print("Initializing Lobby Manager...")
 	LobbyManager.init()
+
+	-- Initialize marketplace receipt handler
+	print("Initializing Marketplace Handler...")
+	MarketplaceHandler.init()
+	print("Marketplace Handler initialized!")
 	
 	-- Initialize Board Detection system after lobby system is ready
 	print("Waiting for lobby system to initialize...")

@@ -5,6 +5,7 @@
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local MarketplaceService = game:GetService("MarketplaceService")
 
 local _Constants = require(game.ReplicatedStorage.Shared.Constants)
 local DataStructures = require(game.ReplicatedStorage.Shared.DataStructures)
@@ -27,6 +28,7 @@ local editArenaFrame = nil
 local arenaSelectionFrames = {}
 local currentArenaCheckmark = nil
 local traitBarFrame = nil -- container for trait icons
+local arenaOwnership = nil -- table of owned arenas from player data
 
 -- UI state variables
 local shopVisible = false
@@ -77,6 +79,47 @@ function UI.createMainUI()
 	sellUnitFrame = mainFrame:FindFirstChild("SellUnitFrame")
 	editArenaFrame = mainFrame:FindFirstChild("EditArenaFrame")
 	traitBarFrame = mainFrame:FindFirstChild("TraitBarFrame") -- Expected container (assumed existing per instructions)
+
+	-- KeybindContainer buttons (Board planner, return to arena, open shop)
+	local keybindContainer = mainFrame:FindFirstChild("KeybindContainer")
+	if keybindContainer then
+		local function connectButton(frameName: string, handler: () -> ())
+			local frame = keybindContainer:FindFirstChild(frameName)
+			if frame then
+				local btn = frame:FindFirstChild("Button")
+				if btn and (btn:IsA("TextButton") or btn:IsA("ImageButton")) then
+					btn.MouseButton1Click:Connect(function()
+						handler()
+					end)
+				end
+			else
+				warn("KeybindContainer missing frame " .. frameName)
+			end
+		end
+
+		-- 1) BoardPlannerButton -> toggleBoard (Key C)
+		connectButton("BoardPlannerButton", function()
+			UI.toggleBoard()
+		end)
+		-- 2) ArenaReturnButton -> fire ReturnToArena remote
+		connectButton("ArenaReturnButton", function()
+			local ev = game.ReplicatedStorage:FindFirstChild("RemoteEvents")
+			if ev then
+				local r = ev:FindFirstChild(_Constants.REMOTE_EVENT_NAMES.RETURN_TO_ARENA)
+				if r then
+					(r :: any):FireServer()
+				else
+					warn("ReturnToArena RemoteEvent not found")
+				end
+			end
+		end)
+		-- 3) OpenUnitShop -> toggleShop (Key F)
+		connectButton("OpenUnitShop", function()
+			UI.toggleShop()
+		end)
+	else
+		warn("KeybindContainer not found under MainFrame; keybind buttons won't be clickable")
+	end
 	
 	print("UI frames found:")
 	print("  shopFrame:", shopFrame and "YES" or "NO")
@@ -101,10 +144,23 @@ function UI.createMainUI()
 			if child.Name:match("ArenaFrame$") or child.Name:match("ArenaFrame") then
 				arenaSelectionFrames[child.Name] = child
 				local button = child:FindFirstChild("SwitchArenaButton")
-				if button and button:IsA("TextButton") or button:IsA("ImageButton") then
+				if button and (button:IsA("TextButton") or button:IsA("ImageButton")) then
 					button.MouseButton1Click:Connect(function()
 						local arenaName = child:GetAttribute("ArenaName") or child.Name:gsub("Frame$","")
-						UI.requestArenaSwitch(arenaName)
+						-- Check ownership locally before firing server request
+						if UI.isArenaOwned(arenaName) then
+							UI.requestArenaSwitch(arenaName)
+						else
+							UI.showNotification("Purchase this arena first!", 2)
+						end
+					end)
+				end
+				-- Bind buy button if present
+				local buyBtn = child:FindFirstChild("BuyButton")
+				if buyBtn and (buyBtn:IsA("TextButton") or buyBtn:IsA("ImageButton")) then
+					buyBtn.MouseButton1Click:Connect(function()
+						local arenaName = child:GetAttribute("ArenaName") or child.Name:gsub("Frame$","")
+						UI.promptArenaPurchase(arenaName)
 					end)
 				end
 		end
@@ -179,6 +235,9 @@ function UI.createMainUI()
 	-- Ensure correct initial visibility (hidden until a selection while board is open)
 	updateSellUnitFrameVisibility()
 	print("UI created successfully from existing ReplicatedStorage elements!")
+
+	-- Initial ownership visuals (may update once player data arrives)
+	UI.refreshArenaOwnershipVisuals()
 end
 
 --[[
@@ -526,6 +585,90 @@ function UI.updatePlayerStats(playerData: DataStructures.PlayerData)
 	-- Update arena selection UI (if any) using selectedArenaName
 	if playerData.selectedArenaName then
 		UI.updateArenaSelection(playerData.selectedArenaName)
+	end
+
+	-- Update ownership reference & visuals
+	arenaOwnership = playerData.arenaOwnership
+	UI.refreshArenaOwnershipVisuals()
+end
+
+-- Determine if an arena is owned locally (default arena always owned)
+function UI.isArenaOwned(arenaName: string): boolean
+	if not arenaName then return false end
+	local constants = _Constants
+	if arenaName == constants.DEFAULT_ARENA_NAME then return true end
+	if arenaOwnership then
+		-- Insert a space before 'Arena' if missing to compare to canonical template names
+		local spaced = arenaName
+		if not spaced:match("%sArena") and spaced:sub(-5):lower() == "arena" then
+			spaced = spaced:gsub("Arena$", " Arena")
+		end
+		local frameVariant = spaced:gsub("Arena", " Frame")
+		local variants = {
+			arenaName, -- original
+			arenaName:gsub("%s+", ""), -- no spaces
+			spaced, -- with space before Arena
+			spaced:gsub("%s+", ""), -- spaced but compact
+			frameVariant,
+			frameVariant:gsub("%s+", ""),
+		}
+		for _, key in ipairs(variants) do
+			if arenaOwnership[key] then return true end
+		end
+	end
+	return false
+end
+
+-- Refresh UI state (darken unowned, show buy button, etc.)
+function UI.refreshArenaOwnershipVisuals()
+	if not editArenaFrame then return end
+	for name, frame in pairs(arenaSelectionFrames) do
+		local arenaName = frame:GetAttribute("ArenaName") or name:gsub("Frame$","")
+		local owned = UI.isArenaOwned(arenaName)
+		local buyBtn = frame:FindFirstChild("BuyButton")
+		local switchBtn = frame:FindFirstChild("SwitchArenaButton")
+		if owned then
+			-- restore brightness & hide buy
+			frame.BackgroundColor3 = Color3.fromRGB(60,60,60)
+			if buyBtn then buyBtn.Visible = false end
+			if switchBtn then switchBtn.AutoButtonColor = true end
+		else
+			-- dark overlay for locked
+			frame.BackgroundColor3 = Color3.fromRGB(25,25,25)
+			if buyBtn then buyBtn.Visible = true end
+			if switchBtn then switchBtn.AutoButtonColor = false end
+		end
+	end
+end
+
+-- Prompt purchase for an arena skin (maps arena name to product id)
+function UI.promptArenaPurchase(arenaName: string)
+	if UI.isArenaOwned(arenaName) then
+		UI.showNotification("Already owned!", 2)
+		return
+	end
+	-- Map arenaName to product id via Constants.ARENA_PRODUCTS keys (normalize by removing spaces)
+	local normalized = arenaName:lower():gsub("%s+", "")
+	local productId = nil
+	for key, id in pairs(_Constants.ARENA_PRODUCTS) do
+		local keyNorm = key:lower():gsub("%s+", "")
+		if keyNorm == normalized or normalized:find(keyNorm, 1, true) or keyNorm:find(normalized, 1, true) then
+			productId = id; break
+		end
+	end
+	if not productId then
+		UI.showNotification("Cannot purchase: unknown arena", 3)
+		return
+	end
+	local plr = Players.LocalPlayer
+	local ok, err = pcall(function()
+		MarketplaceService:PromptProductPurchase(plr, productId)
+	end)
+	if not ok then
+		warn("Failed to prompt purchase: " .. tostring(err))
+		UI.showNotification("Purchase failed to start", 3)
+	else
+		UI.showNotification("Purchasing...", 2)
 	end
 end
 
