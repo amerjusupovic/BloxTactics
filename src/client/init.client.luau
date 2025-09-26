@@ -126,10 +126,10 @@ local function setupKeybindHandlers()
 		elseif input.KeyCode == Enum.KeyCode.C then
 			print("C key pressed - toggling board...")
 			UI.toggleBoard()
-		elseif input.KeyCode == Enum.KeyCode.R then
-			print("R key pressed - resetting player data...")
-			-- Reset player data (for testing)
-			UI.resetPlayerData()
+		-- elseif input.KeyCode == Enum.KeyCode.R then
+		-- 	print("R key pressed - resetting player data...")
+		-- 	-- Reset player data (for testing)
+		-- 	UI.resetPlayerData()
 		elseif input.KeyCode == Enum.KeyCode.Escape then
 			print("Escape key pressed - clearing selection...")
 			-- Clear unit selection
