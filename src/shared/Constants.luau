@@ -103,6 +103,7 @@ Constants.REMOTE_EVENT_NAMES = {
 	HIDE_EDIT_ARENA_FRAME = "HideEditArenaFrame",
 	SWITCH_ARENA = "SwitchArena", -- Client requests switching arena theme
 	RETURN_TO_ARENA = "ReturnToArena", -- Client requests teleport back to their own arena
+	LEADERBOARD_WINS_UPDATE = "LeaderboardWinsUpdate", -- Broadcast top wins data
 }
 
 -- Developer product / gamepass style arena cosmetics (developer products so they can be bought multiple times if different skins later)

@@ -46,7 +46,8 @@ local BattleUnit = {
 	originalPosition = Vector3.new(0, 0, 0),
 	originalParent = nil, -- Original parent Instance (expected to be a Hex_ part)
 	originalHexName = nil, -- Name of the original hex parent (easier re-parenting on reset)
-	originalCFrame = nil -- Full original pivot CFrame for rotation restoration
+	originalCFrame = nil, -- Full original pivot CFrame for rotation restoration
+	originalHexInstance = nil -- Direct reference to original hex (faster & more reliable than name lookup)
 }
 
 -- Active battles storage
@@ -157,6 +158,7 @@ local function createBattleUnit(model: Model?, unit: DataStructures.Unit, team: 
 		originalParent = model.Parent,
 		originalHexName = (model.Parent and typeof(model.Parent.Name) == "string" and model.Parent.Name:find("Hex_") and model.Parent.Name) or nil,
 		originalCFrame = model:GetPivot(),
+		originalHexInstance = (model.Parent and model.Parent.Name:find("Hex_") and model.Parent) or nil,
 		battleUnitId = uniqueId
 	}
 	
@@ -180,6 +182,17 @@ local function createBattleUnit(model: Model?, unit: DataStructures.Unit, team: 
 		if ENABLE_ANIMATION_DEBUG then
 			print(string.format("[ANIM] Disabled default Animate script on %s to avoid conflicts", model.Name))
 		end
+	end
+
+	-- Unanchor torso for battle movement (we will re-anchor post-battle in reset)
+	local torso = model:FindFirstChild("Torso", true)
+	if torso and torso:IsA("BasePart") then
+		-- Only unanchor if it was anchored (anchoring is handled when units are on board/bench)
+		pcall(function()
+			if torso.Anchored then
+					 torso.Anchored = false
+			end
+		end)
 	end
 	
 	return battleUnit
@@ -1017,6 +1030,17 @@ local function resetUnitsAfterBattle(battleData: BattleData)
 	reservedHexes = {}
 	
 	-- Team 1 units (challenged player's original units) - reset to original positions
+	-- First pass: ensure torsos are unanchored so reposition (PivotTo) can't silently fail due to weld constraints
+	for _, unit in ipairs(battleData.team1) do
+		local m = unit.model
+		if m then
+			local torso = m:FindFirstChild("Torso", true)
+			if torso and torso:IsA("BasePart") then
+				pcall(function() torso.Anchored = false end)
+			end
+		end
+	end
+
 	for _, unit in ipairs(battleData.team1) do
 		if unit.model then
 			-- Always ensure core unit identity attributes exist for discovery in the next battle
@@ -1155,7 +1179,71 @@ local function resetUnitsAfterBattle(battleData: BattleData)
 				unit.position = targetCFrame.Position
 			end
 
-			print("Reset unit " .. unit.unit.name .. " to original state")
+			print("Reset unit " .. unit.unit.name .. " to original state (will anchor after all repositioning)")
+		end
+	end
+
+	-- Verification & corrective pass: ensure every model is actually sitting on its original hex (or closest fallback)
+	for _, unit in ipairs(battleData.team1) do
+		local m = unit.model
+		if m then
+			local desiredHex: Instance? = unit.originalHexInstance
+			if not (desiredHex and desiredHex.Parent) and unit.originalHexName then
+				desiredHex = battleData.arena:FindFirstChild(unit.originalHexName)
+			end
+			if not desiredHex and unit.originalPosition then
+				desiredHex = findClosestHex(battleData.arena, unit.originalPosition)
+			end
+
+			if desiredHex then
+				-- Distance check
+				local curPos = m:GetPivot().Position
+				local base: BasePart? = nil
+				if desiredHex:IsA("BasePart") then base = desiredHex elseif desiredHex:IsA("Model") then base = desiredHex.PrimaryPart or desiredHex:FindFirstChildWhichIsA("BasePart") end
+				if base then
+					local unitSize = m:GetExtentsSize()
+					local yTarget = base.Position.Y + (base.Size.Y/2) + (unitSize.Y/2)
+					local targetPos = Vector3.new(base.Position.X, yTarget, base.Position.Z)
+					local needMove = (curPos - targetPos).Magnitude > 0.25 or m.Parent ~= desiredHex
+					if needMove then
+						-- Temporarily unanchor all parts to guarantee pivot application
+						for _, p in ipairs(m:GetDescendants()) do
+							if p:IsA("BasePart") then
+								pcall(function() p.Anchored = false end)
+							end
+						end
+						m.Parent = desiredHex
+						local finalCFrame
+						if unit.originalCFrame then
+							local _, _, _, r00, r01, r02, r10, r11, r12, r20, r21, r22 = unit.originalCFrame:GetComponents()
+							finalCFrame = CFrame.new(targetPos.X, targetPos.Y, targetPos.Z, r00, r01, r02, r10, r11, r12, r20, r21, r22)
+						else
+							finalCFrame = CFrame.lookAt(targetPos, targetPos + base.CFrame.LookVector, Vector3.yAxis)
+						end
+						m:PivotTo(finalCFrame)
+						unit.position = finalCFrame.Position
+						print(string.format("[BattleManager] Forced reposition of %s to original hex %s (%.2f studs correction)", m.Name, desiredHex.Name, (curPos - targetPos).Magnitude))
+					end
+				end
+			else
+				warn("[BattleManager] Could not resolve original hex for unit " .. tostring(m.Name) .. " during reset verification")
+			end
+		end
+	end
+
+	-- Second pass: anchor torsos AFTER all repositioning so none stay at battle location
+	for _, unit in ipairs(battleData.team1) do
+		local m = unit.model
+		if m then
+			local torso = m:FindFirstChild("Torso", true)
+			if torso and torso:IsA("BasePart") then
+				local beforePos = m:GetPivot().Position
+				pcall(function() torso.Anchored = true end)
+				-- Sanity: if somehow still far from original hex, log warning to aid debugging
+				if unit.originalPosition and (beforePos - unit.originalPosition).Magnitude > 5 then
+					warn(string.format("[BattleManager] Unit %s anchored far from original (%.1f studs) - expected reposition earlier", tostring(m.Name), (beforePos - unit.originalPosition).Magnitude))
+				end
+			end
 		end
 	end
 	

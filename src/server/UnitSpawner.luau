@@ -10,6 +10,16 @@ local UnitSpawner = {}
 -- Cache for unit models
 local unitModels = {}
 
+-- Helper to (un)anchor a unit's "Torso" part if present.
+-- Only affects the part literally named "Torso" per requirement.
+local function setTorsoAnchored(model: Model?, anchored: boolean)
+	if not model then return end
+	local torso = model:FindFirstChild("Torso", true)
+	if torso and torso:IsA("BasePart") then
+		torso.Anchored = anchored
+	end
+end
+
 -- Helper function to find player arena in any lobby
 local function findPlayerArena(userId: number): (Folder?, Instance?)
 	-- Search through all lobby folders in the main workspace to find the player's arena
@@ -148,6 +158,9 @@ function UnitSpawner.spawnUnitOnBoard(userId: number, unit: any, position: Vecto
 	
 	-- Parent to the hex
 	spawnedUnit.Parent = hex
+
+	-- Anchor torso while unit is idle on the board (outside battle)
+	setTorsoAnchored(spawnedUnit, true)
 	
 	print("Successfully spawned unit " .. unit.name .. " on board at position: " .. tostring(position))
 	print("=== UnitSpawner.spawnUnitOnBoard SUCCESS ===")
@@ -234,6 +247,9 @@ function UnitSpawner.spawnUnitOnBench(userId: number, unit: any, benchSlot: numb
 	
 	-- Parent to the bench slot
 	spawnedUnit.Parent = bench
+
+	-- Anchor torso while unit is idle on the bench (outside battle)
+	setTorsoAnchored(spawnedUnit, true)
 	
 	print("Successfully spawned unit " .. unit.name .. " on bench at slot: " .. benchSlot)
 	print("=== UnitSpawner.spawnUnitOnBench SUCCESS ===")
@@ -406,6 +422,9 @@ function UnitSpawner.moveUnitBetweenBenchSlots(userId: number, fromSlot: number,
 		local _, _, _, r00, r01, r02, r10, r11, r12, r20, r21, r22 = pivotCFrame:GetComponents()
 		local adjustedCFrame = CFrame.new(targetPos.X, targetPos.Y, targetPos.Z, r00, r01, r02, r10, r11, r12, r20, r21, r22)
 		unitModel:PivotTo(adjustedCFrame)
+
+		-- Ensure torso remains anchored after moving between bench slots
+		setTorsoAnchored(unitModel, true)
 		
 		print("Successfully moved unit from bench slot " .. fromSlot .. " to bench slot " .. toSlot)
 		print("=== UnitSpawner.moveUnitBetweenBenchSlots SUCCESS ===")

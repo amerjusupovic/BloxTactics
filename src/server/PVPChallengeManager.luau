@@ -585,6 +585,15 @@ function PVPChallengeManager.endBattle(challengeId: string, winnerId: number?): 
 		if resultInfo then
 			local rewards = CombatRewards.applyBattleRewards(resultInfo.winnerId, resultInfo.loserId, resultInfo.winnerLevel, resultInfo.loserLevel, resultInfo.winnerStreak, PlayerDataManager)
 
+			-- Record win for leaderboard
+			local okLeaderboard, errLeaderboard = pcall(function()
+				local WinsLeaderboard = require(script.Parent.WinsLeaderboard)
+				WinsLeaderboard.recordWin(resultInfo.winnerId)
+			end)
+			if not okLeaderboard then
+				warn("[PVPChallengeManager] Failed to record win for leaderboard: " .. tostring(errLeaderboard))
+			end
+
 			-- Persist rewards immediately to reduce risk of data loss if players leave right away
 			local winnerSaved = PlayerDataManager.savePlayerData(resultInfo.winnerId)
 			local loserSaved = PlayerDataManager.savePlayerData(resultInfo.loserId)

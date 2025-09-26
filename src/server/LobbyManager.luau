@@ -88,6 +88,17 @@ function LobbyManager.createLobby(): number
 	lobbies[lobbyId] = lobbyData
 	
 	print("Created new lobby " .. lobbyId .. " with " .. MAX_PLAYERS_PER_LOBBY .. " player capacity")
+
+	-- Immediately refresh wins leaderboard so newly spawned lobby boards show current data
+	spawn(function()
+		local ok, err = pcall(function()
+			local WinsLeaderboard = require(script.Parent.WinsLeaderboard)
+			WinsLeaderboard.forceRefresh()
+		end)
+		if not ok then
+			warn("[LobbyManager] Failed to force refresh wins leaderboard on lobby creation: " .. tostring(err))
+		end
+	end)
 	return lobbyId
 end
 

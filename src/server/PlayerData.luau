@@ -44,6 +44,7 @@ local function createDefaultPlayerData(userId: number, username: string): Player
 			currentCapacity = 0
 		},
 		streak = 0,
+		wins = 0, -- total lifetime wins
 		lastUpdated = os.time(),
 		selectedArenaName = Constants.DEFAULT_ARENA_NAME -- default arena
 	}
@@ -92,6 +93,11 @@ function PlayerDataManager.loadPlayerData(userId: number, username: string): Pla
 			playerData.streak = 0
 		end
 
+		-- Ensure wins counter exists
+		if not playerData.wins then
+			playerData.wins = 0
+		end
+
 		-- Ensure arenaOwnership structure exists & default arena owned
 		if not playerData.arenaOwnership then
 			playerData.arenaOwnership = table.clone(Constants.DEFAULT_OWNED_ARENAS)
@@ -119,6 +125,7 @@ function PlayerDataManager.serializePlayerData(playerData: PlayerData): {[string
 		experience = playerData.experience,
 		gold = playerData.gold,
 		streak = playerData.streak,
+		wins = playerData.wins or 0,
 		lastUpdated = playerData.lastUpdated,
 		selectedArenaName = playerData.selectedArenaName,
 		arenaOwnership = playerData.arenaOwnership or table.clone(Constants.DEFAULT_OWNED_ARENAS)
@@ -202,6 +209,7 @@ function PlayerDataManager.deserializePlayerData(serialized: {[string]: any}): P
 		experience = serialized.experience,
 		gold = serialized.gold,
 		streak = serialized.streak,
+		wins = serialized.wins or 0,
 		lastUpdated = serialized.lastUpdated,
 		selectedArenaName = serialized.selectedArenaName or Constants.DEFAULT_ARENA_NAME,
 		arenaOwnership = serialized.arenaOwnership or table.clone(Constants.DEFAULT_OWNED_ARENAS)
@@ -431,6 +439,8 @@ function PlayerDataManager.processBattleResult(winnerId: number?, loserId: numbe
 	-- Update streaks: increment winner streak, reset loser streak
 	winnerData.streak = (winnerData.streak or 0) + 1
 	loserData.streak = 0
+	-- Increment total wins counter for winner
+	winnerData.wins = (winnerData.wins or 0) + 1
 	winnerData.lastUpdated = os.time()
 	loserData.lastUpdated = os.time()
 

@@ -18,6 +18,7 @@ export type PlayerData = {
 	benchState: BenchState,
 	shopState: ShopState?,
 	streak: number, -- win/loss streak
+	wins: number?, -- total lifetime wins (for wins leaderboard)
 	lastUpdated: number,
 	selectedArenaName: string? -- Name of currently selected arena (e.g., "Grass Arena")
 }
