@@ -30,9 +30,9 @@ Constants.SHOP_REFRESH_COOLDOWN = 1 -- seconds
 
 -- Combat rewards constants
 Constants.BASE_EXPERIENCE_REWARD = 10 -- Base experience per enemy level
-Constants.BASE_GOLD_REWARD = 15 -- Base gold per enemy level
-Constants.LOSER_EXPERIENCE_MULTIPLIER = 0.1 -- Loser gets 10% of base experience
-Constants.LOSER_GOLD_MULTIPLIER = 0.1 -- Loser gets 10% of base gold
+Constants.BASE_GOLD_REWARD = 10 -- Base gold per enemy level
+Constants.LOSER_EXPERIENCE_MULTIPLIER = 0.2 -- Loser gets 20% of base experience
+Constants.LOSER_GOLD_MULTIPLIER = 0.2 -- Loser gets 20% of base gold
 
 -- Unit tiering
 Constants.UNITS_FOR_TIER_UP = 3

@@ -7,6 +7,8 @@ local Players = game:GetService("Players")
 local _ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RemoteEvents = require(script.Parent.RemoteEvents)
 local Constants = require(game.ReplicatedStorage.Shared.Constants)
+local BattleManager = require(script.Parent.BattleManager)
+local PVPChallengeManager = require(script.Parent.PVPChallengeManager)
 
 local BoardDetection = {}
 
@@ -110,79 +112,96 @@ end
 
 -- Set up detection zone for a player's board
 function BoardDetection.setupDetectionZone(detectionZone: Part, boardOwnerId: number, boardOwnerName: string)
-	local playersInZone = {}
-	
-	-- Function to check if a player is in the zone
+	-- Track players currently inside the zone
+	-- playersInZone[playerId] = true/false (presence)
+	-- promptShown[playerId] = true if a challenge prompt was sent to that player
+	local playersInZone: {[number]: boolean} = {}
+	local promptShown: {[number]: boolean} = {}
+
+	-- Helper: check if a player is within the detection radius
 	local function isPlayerInZone(player: Player): boolean
 		local character = player.Character
 		if not character then return false end
-		
-		local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-		if not humanoidRootPart then return false end
-		
-		-- Check if player is within the circular detection zone
-		local playerPos = humanoidRootPart.Position
-		local zonePos = detectionZone.Position
-		
-		-- Calculate distance from zone center
-		local distance = (playerPos - zonePos).Magnitude
-		local radius = Constants.BOARD_DETECTION_ZONE_RADIUS
-		
-		return distance <= radius
+		local hrp = character:FindFirstChild("HumanoidRootPart")
+		if not hrp then return false end
+		local distance = (hrp.Position - detectionZone.Position).Magnitude
+		return distance <= Constants.BOARD_DETECTION_ZONE_RADIUS
 	end
-	
-	-- Function to handle player entering zone
-	local function onPlayerEnterZone(player: Player)
-		if player.UserId == boardOwnerId then
-			return -- Don't challenge yourself
+
+	-- Helper: determines if we are allowed to show a challenge prompt between visitor and board owner
+	local function canShowPromptFor(player: Player): boolean
+		-- Never show for the board owner themselves
+		if player.UserId == boardOwnerId then return false end
+		-- Suppress if either the visiting player OR the board owner is currently in a battle
+		if BattleManager.isPlayerInBattle(player.UserId) then return false end
+		if BattleManager.isPlayerInBattle(boardOwnerId) then return false end
+		-- Suppress if either is in battle preparation phase
+		if PVPChallengeManager.isPlayerInBattlePreparation(player.UserId) then return false end
+		if PVPChallengeManager.isPlayerInBattlePreparation(boardOwnerId) then return false end
+		return true
+	end
+
+	local function showPrompt(player: Player)
+		local showEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_CHALLENGE_PROMPT)
+		if showEvent then
+			showEvent:FireClient(player, boardOwnerId, boardOwnerName)
+			promptShown[player.UserId] = true
+			print(string.format("[BoardDetection] Show challenge prompt to %s for board owner %s", player.Name, boardOwnerName))
 		end
-		
-		if playersInZone[player.UserId] then
-			return -- Already in zone 
+	end
+
+	local function hidePrompt(player: Player)
+		if not promptShown[player.UserId] then return end
+		local hideEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.HIDE_CHALLENGE_PROMPT)
+		if hideEvent then
+			hideEvent:FireClient(player)
+			print(string.format("[BoardDetection] Hide challenge prompt from %s (battle state change or exit)", player.Name))
 		end
-		
+		promptShown[player.UserId] = nil
+	end
+
+	local function onEnter(player: Player)
+		if playersInZone[player.UserId] then return end
 		playersInZone[player.UserId] = true
-		
-		-- Show challenge prompt to the player
-		local showChallengePromptEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.SHOW_CHALLENGE_PROMPT)
-		if showChallengePromptEvent then
-			showChallengePromptEvent:FireClient(player, boardOwnerId, boardOwnerName)
+		print(string.format("Player %s entered %s's board area", player.Name, boardOwnerName))
+		if canShowPromptFor(player) then
+			showPrompt(player)
+		else
+			-- Explicitly ensure any lingering prompt is hidden (safety)
+			hidePrompt(player)
 		end
-		
-		print("Player " .. player.Name .. " entered " .. boardOwnerName .. "'s board area")
 	end
-	
-	-- Function to handle player leaving zone
-	local function onPlayerLeaveZone(player: Player)
-		if not playersInZone[player.UserId] then
-			return
-		end
-		
+
+	local function onLeave(player: Player)
+		if not playersInZone[player.UserId] then return end
 		playersInZone[player.UserId] = nil
-		
-		-- Hide challenge prompt
-		local hideChallengePromptEvent = RemoteEvents.getEvent(Constants.REMOTE_EVENT_NAMES.HIDE_CHALLENGE_PROMPT)
-		if hideChallengePromptEvent then
-			hideChallengePromptEvent:FireClient(player)
-		end
-		
-		print("Player " .. player.Name .. " left " .. boardOwnerName .. "'s board area")
+		hidePrompt(player)
+		print(string.format("Player %s left %s's board area", player.Name, boardOwnerName))
 	end
-	
-	-- Check for players in zone periodically
+
+	-- Periodic zone & state evaluation
 	spawn(function()
 		while detectionZone.Parent do
-			wait(0.5) -- Check every 0.5 seconds
-			
-			-- Check all players
+			wait(0.5)
+			local boardOwnerInBattle = BattleManager.isPlayerInBattle(boardOwnerId)
+			local boardOwnerInPrep = PVPChallengeManager.isPlayerInBattlePreparation(boardOwnerId)
 			for _, player in pairs(Players:GetPlayers()) do
-				if isPlayerInZone(player) then
+				local inside = isPlayerInZone(player)
+				if inside then
 					if not playersInZone[player.UserId] then
-						onPlayerEnterZone(player)
+						onEnter(player)
+					else
+						-- Already inside; ensure prompt visibility matches current battle/preparation state
+						local allowed = (not boardOwnerInBattle and not boardOwnerInPrep) and canShowPromptFor(player)
+						if allowed and not promptShown[player.UserId] then
+							showPrompt(player)
+						elseif (not allowed) and promptShown[player.UserId] then
+							hidePrompt(player)
+						end
 					end
 				else
 					if playersInZone[player.UserId] then
-						onPlayerLeaveZone(player)
+						onLeave(player)
 					end
 				end
 			end

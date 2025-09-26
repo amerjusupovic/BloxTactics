@@ -108,6 +108,11 @@ function PVPChallengeManager.canPlayerBeChallenged(playerId: number): boolean
 	if BattleManager.isPlayerInBattle(playerId) then
 		return false
 	end
+
+	-- Check if player is in battle preparation (accepted challenge not yet started)
+	if PVPChallengeManager.isPlayerInBattlePreparation(playerId) then
+		return false
+	end
 	
 	return true
 end
@@ -126,6 +131,10 @@ function PVPChallengeManager.createChallenge(challengerId: number, challengedId:
 		warn("DEBUG: Challenged player cannot be challenged:", challengedId)
 		return nil
 	end
+
+	-- At this point canPlayerBeChallenged already prevents creating a challenge if either
+	-- player is currently in a battle (BattleManager.isPlayerInBattle). This ensures no
+	-- challenge UI will be sent while in battle.
 	
 	-- Create challenge data
 	local challengeId = generateChallengeId()
@@ -192,6 +201,15 @@ function PVPChallengeManager.acceptChallenge(challengedId: number): boolean
 	local challenge = activeChallenges[challengeId]
 	if not challenge or challenge.status ~= "pending" then
 		warn("DEBUG: Challenge not found or not pending. Status:", challenge and challenge.status or "nil")
+		return false
+	end
+
+	-- Prevent acceptance if either player entered a battle in the meantime
+	if BattleManager.isPlayerInBattle(challenge.challengerId) or BattleManager.isPlayerInBattle(challenge.challengedId) then
+		warn("DEBUG: Cannot accept challenge because one or both players are currently in a battle")
+		-- Safety: mark as expired/rejected to free players
+		challenge.status = "expired"
+		PVPChallengeManager.cleanupChallenge(challengeId)
 		return false
 	end
 	
@@ -765,6 +783,16 @@ local function startCleanupTimer()
 			PVPChallengeManager.cleanupExpiredChallenges()
 		end
 	end)
+end
+
+-- Check if a player is currently in the battle preparation phase (challenge accepted, battle not yet started)
+function PVPChallengeManager.isPlayerInBattlePreparation(playerId: number): boolean
+	for _, challenge in pairs(activeChallenges) do
+		if (challenge.challengerId == playerId or challenge.challengedId == playerId) and challenge.status == "accepted" then
+			return true
+		end
+	end
+	return false
 end
 
 -- Initialize the PVP Challenge Manager

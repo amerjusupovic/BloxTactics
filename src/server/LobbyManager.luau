@@ -394,10 +394,6 @@ function LobbyManager.setupRemoteEventHandlers()
 					end
 					local destination = arenaCenter + Vector3.new(0, 5, Constants.PLAYER_SPAWN_FORWARD_OFFSET)
 					root.CFrame = CFrame.new(destination)
-					local notify = remoteEventsFolder:FindFirstChild(Constants.REMOTE_EVENT_NAMES.SHOW_NOTIFICATION)
-					if notify then
-						notify:FireClient(player, "Returned to your arena", 2)
-					end
 				else
 					warn("ReturnToArena: HumanoidRootPart missing for " .. player.Name)
 				end
