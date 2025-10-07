@@ -145,12 +145,12 @@ function UnitTiering.checkForAutomaticCombinations(boardState: BoardState, bench
 		local tier3Count = UnitTiering.countUnitsByTypeAndTier(boardState, benchState, unitId, 3)
 		
 		-- Check for tier 3 combination (3 tier 2 units)
-		if tier3Count == 0 and tier2Count >= 3 then
+		if tier2Count >= 3 then
 			return {unitId = unitId, targetTier = 3}
 		end
 		
 		-- Check for tier 2 combination (3 tier 1 units)
-		if tier2Count == 0 and tier1Count >= 3 then
+		if tier1Count >= 3 then
 			return {unitId = unitId, targetTier = 2}
 		end
 	end
