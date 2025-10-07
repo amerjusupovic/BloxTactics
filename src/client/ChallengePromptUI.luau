@@ -16,6 +16,7 @@ local challengeFrame = nil
 local challengeLabel = nil
 local currentBoardOwnerId = nil
 local _currentBoardOwnerName = nil
+local manuallyDismissed = false  -- Track if player manually closed the prompt
 
 -- Get the existing ChallengeFrame from ReplicatedStorage
 local function getChallengeFrame()
@@ -67,6 +68,18 @@ local function getChallengeFrame()
 		print("DEBUG: NoButton not found!")
 	end
 	
+	-- Get the CloseWindow button and set up click handler
+	local closeButton = challengeFrame:FindFirstChild("CloseWindow")
+	if closeButton then
+		closeButton.MouseButton1Click:Connect(function()
+			manuallyDismissed = true
+			ChallengePromptUI.hideChallengePrompt()
+			print("DEBUG: Challenge prompt manually dismissed")
+		end)
+	else
+		print("DEBUG: CloseWindow button not found!")
+	end
+	
 	-- Hide initially
 	challengeFrame.Visible = false
 	
@@ -78,6 +91,12 @@ function ChallengePromptUI.showChallengePrompt(boardOwnerId: number, boardOwnerN
 	
 	if not challengeFrame then
 		getChallengeFrame()
+	end
+	
+	-- Don't show if manually dismissed (will reset on zone exit/re-enter)
+	if manuallyDismissed then
+		print("DEBUG: Challenge prompt was manually dismissed, not showing")
+		return
 	end
 	
 	currentBoardOwnerId = boardOwnerId
@@ -104,11 +123,20 @@ function ChallengePromptUI.hideChallengePrompt()
 		return
 	end
 	
+	-- Reset the dismissed flag when hiding (will be cleared on zone exit)
+	-- Note: manuallyDismissed stays true until player exits and re-enters
+	
 	currentBoardOwnerId = nil
 	_currentBoardOwnerName = nil
 	
 	-- Hide the frame
 	challengeFrame.Visible = false
+end
+
+-- Reset the manually dismissed flag (called when player leaves detection zone)
+function ChallengePromptUI.resetDismissedState()
+	manuallyDismissed = false
+	print("DEBUG: Challenge prompt dismissed state reset (player left zone)")
 end
 
 -- Challenge the board owner
@@ -149,6 +177,8 @@ function ChallengePromptUI.init()
 	local hideChallengePromptEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.HIDE_CHALLENGE_PROMPT)
 	hideChallengePromptEvent.OnClientEvent:Connect(function()
 		ChallengePromptUI.hideChallengePrompt()
+		-- Reset dismissed state when server hides prompt (player left zone)
+		ChallengePromptUI.resetDismissedState()
 	end)
 	
 	print("Challenge Prompt UI initialized")
