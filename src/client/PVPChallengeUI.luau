@@ -23,6 +23,7 @@ local currentChallengeId = nil
 local countdownTimer = nil
 local battleCountdownVisual = nil
 local originalCountdownVisualPosition = nil
+local traitBarFrame = nil -- Reference to the TraitBarFrame from main UI
 
 -- PVP state storage
 local currentPVPBoardState = nil
@@ -32,6 +33,54 @@ local currentPVPBenchState = nil
 
 -- ScreenGui containers
 local pvpFramesScreenGui = nil
+
+-- Helper function to update TotalUnits label in a frame
+local function updateTotalUnitsLabel(frame, currentUnits: number, playerLevel: number)
+	if not frame then return end
+	
+	local totalUnitsLabel = frame:FindFirstChild("TotalUnits")
+	if totalUnitsLabel and totalUnitsLabel:IsA("TextLabel") then
+		-- Calculate max units using the same formula as Board.calculateMaxBoardUnits
+		local maxUnits = math.min(playerLevel + 2, 10)
+		totalUnitsLabel.Text = string.format("%d/%d", currentUnits, maxUnits)
+		print("Updated PVP TotalUnits label:", totalUnitsLabel.Text)
+	end
+end
+
+-- Helper function to get current player level from UI module
+local function getPlayerLevel(): number?
+	-- Try to get player data from the main UI module
+	local UI = require(script.Parent.UI)
+	local playerData = UI.getCurrentPlayerData and UI.getCurrentPlayerData()
+	if playerData and playerData.level then
+		return playerData.level
+	end
+	
+	-- Fallback: get from stats frame
+	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+	local mainGui = playerGui:FindFirstChild("BloxTacticsUITemplate")
+	if mainGui then
+		local mainFrame = mainGui:FindFirstChild("MainFrame")
+		if mainFrame then
+			local statsFrame = mainFrame:FindFirstChild("StatsFrame")
+			if statsFrame then
+				local levelLabel = statsFrame:FindFirstChild("LevelLabel")
+				if levelLabel and levelLabel:IsA("TextLabel") then
+					-- Parse level from text like "Level: 5"
+					local levelText = levelLabel.Text
+					local level = tonumber(string.match(levelText, "%d+"))
+					if level then
+						return level
+					end
+				end
+			end
+		end
+	end
+	
+	-- Default to level 1 if we can't find it
+	warn("Could not find player level, defaulting to 1")
+	return 1
+end
 
 
 -- Create PVP board and bench frames
@@ -160,6 +209,25 @@ function PVPChallengeUI.showPVPFrames(boardState: DataStructures.BoardState, ben
 	pvpBenchFrame.Visible = true
 	print("DEBUG: Made PVP frames visible")
 	
+	-- Show TraitBarFrame when PVP frames are visible
+	if not traitBarFrame then
+		-- Get reference to TraitBarFrame from main UI
+		local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+		local mainGui = playerGui:FindFirstChild("BloxTacticsUITemplate")
+		if mainGui then
+			local mainFrame = mainGui:FindFirstChild("MainFrame")
+			if mainFrame then
+				traitBarFrame = mainFrame:FindFirstChild("TraitBarFrame")
+			end
+		end
+	end
+	if traitBarFrame then
+		traitBarFrame.Visible = true
+		print("DEBUG: Made TraitBarFrame visible")
+	else
+		warn("DEBUG: TraitBarFrame not found!")
+	end
+	
 	-- Show countdown label
 	if pvpCountdownLabel then
 		pvpCountdownLabel.Visible = true
@@ -181,6 +249,12 @@ function PVPChallengeUI.hidePVPFrames()
 	end
 	if pvpCountdownLabel then
 		pvpCountdownLabel.Visible = false
+	end
+	
+	-- Hide TraitBarFrame when PVP frames are hidden
+	if traitBarFrame then
+		traitBarFrame.Visible = false
+		print("DEBUG: Made TraitBarFrame hidden")
 	end
 	
 	-- Clear selection when hiding frames
@@ -213,6 +287,17 @@ function PVPChallengeUI.updatePVPBoardDisplay(boardState: DataStructures.BoardSt
 		if position and unit then
 			PVPChallengeUI.placeUnitOnPVPBoard(unit, position)
 		end
+	end
+	
+	-- Update TotalUnits label if player level is available
+	local playerLevel = getPlayerLevel()
+	if playerLevel then
+		-- Count current units
+		local currentUnits = 0
+		for _ in pairs(boardState.grid) do
+			currentUnits = currentUnits + 1
+		end
+		updateTotalUnitsLabel(pvpBoardFrame, currentUnits, playerLevel)
 	end
 end
 
@@ -467,6 +552,10 @@ function PVPChallengeUI.init()
 	local updatePVPFramesEvent = remoteEventsFolder:WaitForChild(Constants.REMOTE_EVENT_NAMES.UPDATE_PVP_FRAMES)
 	updatePVPFramesEvent.OnClientEvent:Connect(function(boardState, benchState)
 		print("DEBUG: Received PVP frames update event")
+		-- Store the updated states so they can be synced later
+		currentPVPBoardState = boardState
+		currentPVPBenchState = benchState
+		print("DEBUG: Stored updated PVP board and bench states")
 		-- Update the PVP frames with the new board and bench state
 		PVPChallengeUI.updatePVPBoardDisplay(boardState)
 		PVPChallengeUI.updatePVPBenchDisplay(benchState)

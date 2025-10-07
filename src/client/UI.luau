@@ -33,6 +33,7 @@ local arenaOwnership = nil -- table of owned arenas from player data
 -- UI state variables
 local shopVisible = false
 local boardVisible = false
+local currentPlayerData = nil -- Store current player data to access level and other stats
 
 -- Unit selection state is now handled by UnitMovement module
 
@@ -514,10 +515,26 @@ function UI.hideEditArenaFrame()
 	end
 end
 
+-- Helper function to update TotalUnits label in a frame
+local function updateTotalUnitsLabel(frame, currentUnits: number, playerLevel: number)
+	if not frame then return end
+	
+	local totalUnitsLabel = frame:FindFirstChild("TotalUnits")
+	if totalUnitsLabel and totalUnitsLabel:IsA("TextLabel") then
+		-- Calculate max units using the same formula as Board.calculateMaxBoardUnits
+		local maxUnits = math.min(playerLevel + 2, 10)
+		totalUnitsLabel.Text = string.format("%d/%d", currentUnits, maxUnits)
+		print("Updated TotalUnits label:", totalUnitsLabel.Text)
+	end
+end
+
 -- Function to update player stats display
 function UI.updatePlayerStats(playerData: DataStructures.PlayerData)
 	print("=== UI.updatePlayerStats START ===")
 	print("Player data received:", playerData)
+	
+	-- Store current player data for later use
+	currentPlayerData = playerData
 	
 	if not statsFrame then 
 		warn("Stats frame not found!")
@@ -1033,6 +1050,11 @@ function UI.updateBoardDisplay(boardState: DataStructures.BoardState)
 
 	-- Also refresh trait display from the latest board state (extra safety)
 	UI.refreshTraitsFromBoardState(boardState)
+	
+	-- Update TotalUnits label if player data is available
+	if currentPlayerData and currentPlayerData.level then
+		updateTotalUnitsLabel(boardFrame, boardState.currentUnits or unitCount, currentPlayerData.level)
+	end
 end
 
 -- Function to update bench display
@@ -1261,6 +1283,11 @@ function UI.showNotification(message: string, duration: number)
 	tween.Completed:Connect(function()
 		notification:Destroy()
 	end)
+end
+
+-- Function to get current player data
+function UI.getCurrentPlayerData()
+	return currentPlayerData
 end
 
 -- Board and bench hexes are now created using the shared UnitMovement module
